@@ -34,6 +34,8 @@ class EditCourseActivity : AppCompatActivity() {
     private var courseId = 0L
     private var selectedDay = 0        // 1..7，0 = 未选
     private var selectedColor = 0
+    /** 编辑模式下保留既有的隐藏周次（隐藏状态不应因编辑信息而丢失）。 */
+    private var hiddenWeeks: Set<Int> = emptySet()
     private val dayButtons = mutableListOf<MaterialButton>()
     private val colorViews = mutableListOf<View>()
 
@@ -66,7 +68,7 @@ class EditCourseActivity : AppCompatActivity() {
         }
 
         bindViews()
-        if (courseId != 0L) loadExisting()
+        if (courseId != 0L) loadExisting() else applyPrefill()
     }
 
     private fun bindViews() {
@@ -143,6 +145,7 @@ class EditCourseActivity : AppCompatActivity() {
             etName.setText(course.name)
             etTeacher.setText(course.teacher)
             etRoom.setText(course.room)
+            hiddenWeeks = course.hiddenWeeks
             npStart.value = course.startPeriod
             npEnd.value = course.endPeriod
             selectedDay = course.dayOfWeek
@@ -160,6 +163,20 @@ class EditCourseActivity : AppCompatActivity() {
                 }
             )
             selectColor(course.colorIndex)
+        }
+    }
+
+    /** 新增模式下的预填：长按课表空白格加课时，带上星期与节次。 */
+    private fun applyPrefill() {
+        val day = intent.getIntExtra(EXTRA_PREFILL_DAY, 0)
+        val period = intent.getIntExtra(EXTRA_PREFILL_PERIOD, 0)
+        if (day in 1..7) {
+            selectedDay = day
+            dayButtons.getOrNull(day - 1)?.isChecked = true
+        }
+        if (period in 1..JluTimeTable.PERIODS.size) {
+            npStart.value = period
+            npEnd.value = (period + 1).coerceAtMost(JluTimeTable.PERIODS.size)
         }
     }
 
@@ -185,6 +202,7 @@ class EditCourseActivity : AppCompatActivity() {
             endPeriod = npEnd.value,
             weeks = weeks,
             colorIndex = selectedColor,
+            hiddenWeeks = hiddenWeeks,
             id = courseId,
         )
         lifecycleScope.launch {
@@ -223,11 +241,23 @@ class EditCourseActivity : AppCompatActivity() {
 
     companion object {
         private const val EXTRA_COURSE_ID = "extra_course_id"
+        private const val EXTRA_PREFILL_DAY = "extra_prefill_day"
+        private const val EXTRA_PREFILL_PERIOD = "extra_prefill_period"
         private val dayNames = arrayOf("一", "二", "三", "四", "五", "六", "日")
 
-        /** courseId 传 0（默认）表示新增课程。 */
-        fun intent(context: Context, courseId: Long = 0L): Intent =
-            Intent(context, EditCourseActivity::class.java).putExtra(EXTRA_COURSE_ID, courseId)
+        /**
+         * courseId 传 0（默认）表示新增课程；新增时可预填星期与节次
+         * （长按课表空白格快速加课的入口）。
+         */
+        fun intent(
+            context: Context,
+            courseId: Long = 0L,
+            prefillDay: Int = 0,
+            prefillStartPeriod: Int = 0,
+        ): Intent = Intent(context, EditCourseActivity::class.java)
+            .putExtra(EXTRA_COURSE_ID, courseId)
+            .putExtra(EXTRA_PREFILL_DAY, prefillDay)
+            .putExtra(EXTRA_PREFILL_PERIOD, prefillStartPeriod)
     }
 }
 

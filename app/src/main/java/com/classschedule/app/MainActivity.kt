@@ -9,6 +9,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.classschedule.app.data.TermCalendar
 import com.classschedule.app.model.Course
+import com.classschedule.app.ui.CourseDetailSheet
 import com.classschedule.app.ui.EditCourseActivity
 import com.classschedule.app.ui.MainViewModel
 import com.classschedule.app.ui.TimetableView
@@ -42,8 +43,13 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
 
         timetable = findViewById(R.id.timetable)
-        timetable.onCourseClick = { course ->
-            startActivity(EditCourseActivity.intent(this, course.id))
+        // 点击课程块 -> 详情弹窗（不再直接进编辑页，借鉴 thu-info 交互）
+        timetable.onCourseClick = { course -> showCourseDetail(course) }
+        // 长按空白格 -> 预填星期与节次，快速加课
+        timetable.onEmptyCellLongClick = { day, period ->
+            startActivity(
+                EditCourseActivity.intent(this, prefillDay = day, prefillStartPeriod = period)
+            )
         }
         // 横滑切换周次（借鉴 thu-info 的手势交互）
         timetable.onWeekSwipe = { delta -> switchWeek(selectedWeek + delta) }
@@ -73,6 +79,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
         updateWeekUi()
+    }
+
+    /** 课程详情底部弹窗：查看信息 + 编辑 / 删除 / 隐藏（M3）。 */
+    private fun showCourseDetail(course: Course) {
+        CourseDetailSheet(
+            context = this,
+            course = course,
+            selectedWeek = selectedWeek,
+            onEdit = { startActivity(EditCourseActivity.intent(this, course.id)) },
+            onDelete = { viewModel.deleteCourse(course.id) },
+            onHideWeeks = { weeks -> viewModel.hideCourseWeeks(course, weeks) },
+            onRestore = { viewModel.restoreCourse(course) },
+        ).open()
     }
 
     /** 切换到 [week]（自动限制在 1..总周数内）并重绘。 */

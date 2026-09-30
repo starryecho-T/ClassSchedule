@@ -33,4 +33,15 @@
     <string name="toast_period_invalid">开始节次不能大于结束节次</string>
     <string name="toast_week_invalid">起始周不能大于结束周</string>
     <string name="fab_add_course">添加课程</string>
+
+    <!-- M3 课程详情弹窗 -->
+    <string name="sheet_edit">编辑</string>
+    <string name="sheet_hide_once">仅隐藏本周这一次</string>
+    <string name="sheet_hide_all">隐藏全部周次</string>
+    <string name="sheet_restore">恢复显示</string>
+    <string name="sheet_teacher_fmt">教师：%1$s</string>
+    <string name="sheet_room_fmt">地点：%1$s</string>
+    <string name="sheet_weeks_fmt">周次：%1$s</string>
+    <string name="sheet_hidden_note">已隐藏 %1$d 个周次</string>
+    <string name="sheet_empty_hint">—</string>
 </resources>

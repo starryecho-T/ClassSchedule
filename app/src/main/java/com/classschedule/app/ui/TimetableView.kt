@@ -12,6 +12,7 @@ import android.text.TextUtils
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import com.classschedule.app.data.JluTimeTable
 import com.classschedule.app.model.Course
 import java.time.LocalDate
@@ -233,7 +234,7 @@ class TimetableView @JvmOverloads constructor(
                 .build()
 
             courseInfoPaint.color = color
-            val infoText = "@${course.room}\n${weeksText(course.weeks)}"
+            val infoText = "@${course.room}\n${Course.weeksText(course.weeks)}"
             val infoLayout = StaticLayout.Builder
                 .obtain(infoText, 0, infoText.length, courseInfoPaint, contentWidth)
                 .setAlignment(Layout.Alignment.ALIGN_CENTER)
@@ -252,17 +253,34 @@ class TimetableView @JvmOverloads constructor(
         }
     }
 
-    // ---------- 触摸：点击课程块 / 横滑切换周次 ----------
+    // ---------- 触摸：点击课程块 / 横滑切换周次 / 长按空白加课 ----------
     private var downX = 0f
     private var downY = 0f
+
+    /** 长按空白格子：快速加课（把星期与节次预填进编辑页）。 */
+    var onEmptyCellLongClick: ((day: Int, period: Int) -> Unit)? = null
+
+    private val longPressAction = Runnable {
+        if (hitCourse(downX, downY) != null) return@Runnable
+        val colWidth = (width - timeColumnWidth) / 7f
+        if (colWidth <= 0f) return@Runnable
+        val day = ((downX - timeColumnWidth) / colWidth).toInt() + 1
+        val period = ((downY - headerHeight) / cellHeight).toInt() + 1
+        if (day in 1..7 && period in 1..JluTimeTable.PERIODS.size) {
+            performLongClick()
+            onEmptyCellLongClick?.invoke(day, period)
+        }
+    }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = event.x
                 downY = event.y
+                postDelayed(longPressAction, ViewConfiguration.getLongPressTimeout().toLong())
             }
             MotionEvent.ACTION_UP -> {
+                removeCallbacks(longPressAction)
                 val dx = event.x - downX
                 val dy = event.y - downY
                 if (abs(dx) > dp(60f) && abs(dx) > abs(dy) * 2f) {
@@ -272,8 +290,14 @@ class TimetableView @JvmOverloads constructor(
                     hitCourse(event.x, event.y)?.let { onCourseClick?.invoke(it) }
                 }
             }
+            MotionEvent.ACTION_CANCEL -> removeCallbacks(longPressAction)
         }
         return true
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(longPressAction)
+        super.onDetachedFromWindow()
     }
 
     /** 命中测试：根据 (x, y) 反算星期与节次，返回该位置的课程。 */
@@ -285,21 +309,6 @@ class TimetableView @JvmOverloads constructor(
         if (day !in 1..7 || period !in 1..JluTimeTable.PERIODS.size) return null
         return courses.lastOrNull {
             it.dayOfWeek == day && period in it.startPeriod..it.endPeriod
-        }
-    }
-
-    private fun weeksText(weeks: Set<Int>): String {
-        if (weeks.isEmpty()) return ""
-        val sorted = weeks.sorted()
-        val first = sorted.first()
-        val last = sorted.last()
-        val contiguous = sorted == (first..last).toList()
-        return when {
-            weeks.size == 1 -> "第${first}周"
-            contiguous && sorted.all { it % 2 == 1 } -> "${first}-${last}周单周"
-            contiguous && sorted.all { it % 2 == 0 } -> "${first}-${last}周双周"
-            contiguous -> "${first}-${last}周"
-            else -> "${first}-${last}周(部分)"
         }
     }
 }

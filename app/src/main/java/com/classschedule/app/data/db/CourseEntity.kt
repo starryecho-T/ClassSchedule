@@ -19,6 +19,7 @@ data class CourseEntity(
     @ColumnInfo(name = "end_period") val endPeriod: Int,
     @ColumnInfo(name = "weeks_csv") val weeksCsv: String,
     @ColumnInfo(name = "color_index") val colorIndex: Int,
+    @ColumnInfo(name = "hidden_weeks_csv", defaultValue = "") val hiddenWeeksCsv: String = "",
 )
 
 /** 领域对象 <-> 实体 转换。 */
@@ -32,6 +33,7 @@ fun Course.toEntity(): CourseEntity = CourseEntity(
     endPeriod = endPeriod,
     weeksCsv = weeks.joinToString(",") { it.toString() },
     colorIndex = colorIndex,
+    hiddenWeeksCsv = hiddenWeeks.joinToString(",") { it.toString() },
 )
 
 fun CourseEntity.toDomain(): Course = Course(
@@ -44,4 +46,5 @@ fun CourseEntity.toDomain(): Course = Course(
     endPeriod = endPeriod,
     weeks = weeksCsv.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet(),
     colorIndex = colorIndex,
+    hiddenWeeks = hiddenWeeksCsv.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet(),
 )
