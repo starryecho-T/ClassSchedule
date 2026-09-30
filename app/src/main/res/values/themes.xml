@@ -1,0 +1,4 @@
+<resources>
+    <!-- 应用主题：Material 3，支持日间/夜间模式 -->
+    <style name="Theme.ClassSchedule" parent="Theme.Material3.DayNight.NoActionBar" />
+</resources>
