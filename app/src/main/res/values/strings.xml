@@ -2,4 +2,28 @@
     <string name="app_name">课表</string>
     <string name="timetable_title">第 %1$d 周课表</string>
     <string name="timetable_subtitle">吉林大学 · 2026-2027 学年第一学期</string>
+
+    <!-- M2 课程编辑 -->
+    <string name="edit_course_new">添加课程</string>
+    <string name="edit_course_edit">编辑课程</string>
+    <string name="hint_course_name">课程名称</string>
+    <string name="hint_teacher">教师（可选）</string>
+    <string name="hint_room">教室（可选）</string>
+    <string name="label_day">星期</string>
+    <string name="label_period">节次</string>
+    <string name="label_week_range">周次</string>
+    <string name="label_week_mode">单双周</string>
+    <string name="label_color">颜色</string>
+    <string name="week_mode_all">每周</string>
+    <string name="week_mode_odd">单周</string>
+    <string name="week_mode_even">双周</string>
+    <string name="period_to">至</string>
+    <string name="action_save">保存</string>
+    <string name="action_delete">删除</string>
+    <string name="delete_confirm">确定删除这门课程吗？</string>
+    <string name="toast_name_empty">请填写课程名称</string>
+    <string name="toast_day_required">请选择星期</string>
+    <string name="toast_period_invalid">开始节次不能大于结束节次</string>
+    <string name="toast_week_invalid">起始周不能大于结束周</string>
+    <string name="fab_add_course">添加课程</string>
 </resources>

@@ -10,6 +10,7 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import android.util.AttributeSet
+import android.view.MotionEvent
 import android.view.View
 import com.classschedule.app.data.JluTimeTable
 import com.classschedule.app.model.Course
@@ -49,17 +50,16 @@ class TimetableView @JvmOverloads constructor(
     private val todayColumnColor = if (isNight) 0x14FFFFFF else 0x0D1E88E5
     private val todayPillColor = 0xFF1E88E5.toInt()
 
-    /** 课程调色板（Material 500 系）。 */
-    private val palette = intArrayOf(
-        0xFFE53935.toInt(), 0xFFD81B60.toInt(), 0xFF8E24AA.toInt(), 0xFF3949AB.toInt(),
-        0xFF1E88E5.toInt(), 0xFF00897B.toInt(), 0xFF43A047.toInt(), 0xFFF4511E.toInt(),
-        0xFF6D4C41.toInt(), 0xFF546E7A.toInt(),
-    )
+    /** 课程调色板：与编辑页共享（见 [CourseColors]）。 */
+    private val palette = CourseColors.PALETTE
 
     private val dayNames = arrayOf("一", "二", "三", "四", "五", "六", "日")
 
     // ---------- 数据 ----------
     private var courses: List<Course> = emptyList()
+
+    /** 课程块被点击时的回调（用于进入编辑页）。 */
+    var onCourseClick: ((Course) -> Unit)? = null
 
     // ---------- 画笔 ----------
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -213,6 +213,25 @@ class TimetableView @JvmOverloads constructor(
             canvas.translate(0f, nameLayout.height + dp(4f))
             infoLayout.draw(canvas)
             canvas.restore()
+        }
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_UP) {
+            hitCourse(event.x, event.y)?.let { onCourseClick?.invoke(it) }
+        }
+        return true
+    }
+
+    /** 命中测试：根据 (x, y) 反算星期与节次，返回该位置的课程。 */
+    private fun hitCourse(x: Float, y: Float): Course? {
+        if (y < headerHeight || x < timeColumnWidth) return null
+        val colWidth = (width - timeColumnWidth) / 7f
+        val day = ((x - timeColumnWidth) / colWidth).toInt() + 1
+        val period = ((y - headerHeight) / cellHeight).toInt() + 1
+        if (day !in 1..7 || period !in 1..JluTimeTable.PERIODS.size) return null
+        return courses.lastOrNull {
+            it.dayOfWeek == day && period in it.startPeriod..it.endPeriod
         }
     }
 

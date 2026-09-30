@@ -24,6 +24,8 @@ data class Course(
     val endPeriod: Int,
     val weeks: Set<Int>,
     val colorIndex: Int = 0,
+    /** 数据库主键；0 表示尚未入库（内存构造的对象）。 */
+    val id: Long = 0,
 ) {
     /** 该课程在第 [week] 周是否上课。 */
     fun isThisWeek(week: Int): Boolean = week in weeks
