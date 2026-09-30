@@ -11,12 +11,6 @@ import com.classschedule.app.model.Course
  */
 object SampleData {
 
-    /** 老版本内置示例课程的名称集合，用于升级时识别「未被用户改动」的旧数据。 */
-    val LEGACY_SAMPLE_NAMES: Set<String> = setOf(
-        "高等数学 A(一)", "数据结构", "大学物理", "大学英语(二)", "中国近现代史纲要",
-        "体育(二)", "线性代数", "离散数学", "数据结构实验", "形势与政策", "中华传统文化(公选)",
-    )
-
     val COURSES: List<Course> = listOf(
         // ---------- 周一 ----------
         Course("概率论与数理统计B", "李亚军", "李四光楼-206", 1, 1, 2, Course.allWeeks(4..17), 0),

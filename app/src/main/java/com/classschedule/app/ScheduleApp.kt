@@ -16,7 +16,7 @@ class ScheduleApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        val repo = CourseRepository(AppDatabase.getDatabase(this).courseDao())
+        val repo = CourseRepository(this, AppDatabase.getDatabase(this).courseDao())
         appScope.launch { repo.seedIfEmpty() }
     }
 

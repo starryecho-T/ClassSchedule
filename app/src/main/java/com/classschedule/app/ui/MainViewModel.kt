@@ -41,7 +41,7 @@ class MainViewModel(private val repo: CourseRepository) : ViewModel() {
         val Factory = viewModelFactory {
             initializer {
                 val dao = AppDatabase.getDatabase(ScheduleApp.instance).courseDao()
-                MainViewModel(CourseRepository(dao))
+                MainViewModel(CourseRepository(ScheduleApp.instance, dao))
             }
         }
     }

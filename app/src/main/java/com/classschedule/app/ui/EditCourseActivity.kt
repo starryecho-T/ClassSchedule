@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
  */
 class EditCourseActivity : AppCompatActivity() {
 
-    private val repo by lazy { CourseRepository(AppDatabase.getDatabase(this).courseDao()) }
+    private val repo by lazy { CourseRepository(this, AppDatabase.getDatabase(this).courseDao()) }
 
     private var courseId = 0L
     private var selectedDay = 0        // 1..7，0 = 未选
