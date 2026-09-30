@@ -26,9 +26,19 @@ class CourseRepository(private val dao: CourseDao) {
 
     suspend fun deleteById(id: Long) = dao.deleteById(id)
 
-    /** 首次启动预填示例课程，保证开箱即有内容可编辑。 */
+    /**
+     * 首次启动预填真实课表；老版本升级时，若库里仍是未被用户改动过的旧示例课程，
+     * 自动替换为真实课表（用户一旦增删改过任何课程，则视为已接手，不再覆盖）。
+     */
     suspend fun seedIfEmpty(sample: List<Course> = SampleData.COURSES) {
-        if (dao.count() == 0) {
+        val existing = dao.getAllOnce()
+        if (existing.isEmpty()) {
+            dao.insertAll(sample.map { it.toEntity() })
+            return
+        }
+        val untouchedLegacy = existing.all { it.toDomain().name in SampleData.LEGACY_SAMPLE_NAMES }
+        if (untouchedLegacy) {
+            dao.deleteAll()
             dao.insertAll(sample.map { it.toEntity() })
         }
     }

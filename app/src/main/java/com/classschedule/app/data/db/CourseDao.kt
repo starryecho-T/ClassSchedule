@@ -21,6 +21,12 @@ interface CourseDao {
     @Query("SELECT COUNT(*) FROM courses")
     suspend fun count(): Int
 
+    @Query("SELECT * FROM courses ORDER BY day_of_week, start_period")
+    suspend fun getAllOnce(): List<CourseEntity>
+
+    @Query("DELETE FROM courses")
+    suspend fun deleteAll()
+
     /** 有 id 更新、无 id 插入。 */
     @Upsert
     suspend fun upsert(course: CourseEntity): Long
