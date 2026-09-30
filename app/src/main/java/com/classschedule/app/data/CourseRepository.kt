@@ -46,7 +46,7 @@ class CourseRepository(
     }
 
     companion object {
-        /** 内置课表数据版本（真实课表 v1，2026-2027 第一学期）。 */
-        private const val SEED_VERSION = 1
+        /** 内置课表数据版本（v2：思政实践/马原晚课 9-11 节，实际不上第 12 节）。 */
+        private const val SEED_VERSION = 2
     }
 }

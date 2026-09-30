@@ -18,13 +18,13 @@ object SampleData {
         Course("自然地理学", "张艳红", "李四光楼-313", 1, 3, 4, Course.allWeeks(9..16), 4),
         Course("MATLAB程序设计", "丁继红", "第二阶梯教室", 1, 5, 6, Course.allWeeks(4..13), 2),
         Course("地图学", "王明常", "李四光楼-308", 1, 7, 8, Course.allWeeks(4..12), 6),
-        Course("思想政治理论课实践教学", "王笑严", "线上教学", 1, 9, 12, Course.allWeeks(4..9), 5),
+        Course("思想政治理论课实践教学", "王笑严", "线上教学", 1, 9, 11, Course.allWeeks(4..9), 5),
         // ---------- 周二 ----------
         Course("面向对象程序设计", "路兴昌", "李四光楼-308", 2, 1, 2, Course.allWeeks(4..12), 7),
         Course("地理信息系统原理A", "路兴昌", "李四光楼-312", 2, 3, 4, Course.allWeeks(4..15), 8),
         Course("大学物理B", "郭欣", "李四光楼-206", 2, 5, 6, Course.allWeeks(4..16), 1),
         Course("体育Ⅲ", "夏忠岩", "体育场", 2, 7, 8, Course.allWeeks(4..17), 9),
-        Course("马克思主义基本原理", "王思然", "李四光楼-107", 2, 9, 12, Course.allWeeks(4..10), 5),
+        Course("马克思主义基本原理", "王思然", "李四光楼-107", 2, 9, 11, Course.allWeeks(4..10), 5),
         // ---------- 周三 ----------
         Course("中国文化的英文表达Ⅱ", "于晓辉", "敬信楼D305", 3, 1, 2, Course.allWeeks(4..17), 3),
         Course("人文地理学", "张萍", "李四光楼-312", 3, 3, 4, Course.allWeeks(4..16), 9),
