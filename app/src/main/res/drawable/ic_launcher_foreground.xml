@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App icon foreground: a white schedule card with a header bar and
+     colorful course blocks - a miniature of the timetable week view. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- White rounded card -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35,32 h38 a8,8 0 0 1 8,8 v28 a8,8 0 0 1 -8,8 h-38 a8,8 0 0 1 -8,-8 v-28 a8,8 0 0 1 8,-8 z" />
+
+    <!-- Header bar (deep blue) -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M35,32 h38 a8,8 0 0 1 8,8 v2 h-54 v-2 a8,8 0 0 1 8,-8 z" />
+
+    <!-- Weekday dots on the header -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35.8,37 a2.2,2.2 0 1 0 4.4,0 a2.2,2.2 0 1 0 -4.4,0 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46.8,37 a2.2,2.2 0 1 0 4.4,0 a2.2,2.2 0 1 0 -4.4,0 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M57.8,37 a2.2,2.2 0 1 0 4.4,0 a2.2,2.2 0 1 0 -4.4,0 z" />
+
+    <!-- Staggered course blocks (same palette as in-app colors) -->
+    <path
+        android:fillColor="#E53935"
+        android:pathData="M34,46 h12 v11 h-12 z" />
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M48,46 h12 v8 h-12 z" />
+    <path
+        android:fillColor="#43A047"
+        android:pathData="M62,46 h12 v14 h-12 z" />
+    <path
+        android:fillColor="#F4511E"
+        android:pathData="M34,59 h12 v9 h-12 z" />
+    <path
+        android:fillColor="#8E24AA"
+        android:pathData="M48,57 h12 v11 h-12 z" />
+    <path
+        android:fillColor="#00897B"
+        android:pathData="M62,63 h12 v5 h-12 z" />
+</vector>
