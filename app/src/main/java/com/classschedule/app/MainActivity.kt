@@ -1,6 +1,9 @@
 package com.classschedule.app
 
+import android.content.Intent
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.TextView
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -12,6 +15,7 @@ import com.classschedule.app.model.Course
 import com.classschedule.app.ui.CourseDetailSheet
 import com.classschedule.app.ui.EditCourseActivity
 import com.classschedule.app.ui.MainViewModel
+import com.classschedule.app.ui.ScheduleOverviewActivity
 import com.classschedule.app.ui.TimetableView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
@@ -79,6 +83,22 @@ class MainActivity : AppCompatActivity() {
             }
         }
         updateWeekUi()
+    }
+
+    /** 顶栏菜单：日程概览入口（M4）。 */
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_main, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_overview -> {
+                startActivity(Intent(this, ScheduleOverviewActivity::class.java))
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     /** 课程详情底部弹窗：查看信息 + 编辑 / 删除 / 隐藏（M3）。 */

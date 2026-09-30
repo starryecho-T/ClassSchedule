@@ -44,4 +44,10 @@
     <string name="sheet_weeks_fmt">周次：%1$s</string>
     <string name="sheet_hidden_note">已隐藏 %1$d 个周次</string>
     <string name="sheet_empty_hint">—</string>
+
+    <!-- M4 日程概览 -->
+    <string name="overview_title">日程概览</string>
+    <string name="overview_subtitle_fmt">第 %1$d 周 · %2$d月%3$d日 周%4$s</string>
+    <string name="overview_empty">这一天没有课</string>
+    <string name="overview_time_fmt">%1$s~%2$s · 第%3$d-%4$d节</string>
 </resources>
