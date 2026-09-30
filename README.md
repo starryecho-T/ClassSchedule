@@ -2,7 +2,7 @@
 
 一款简洁美观的 Android 课表应用，帮助你一目了然地查看每周课程安排。
 
-> 项目状态：🚧 初始化阶段（项目骨架已搭建，功能开发中）
+> 项目状态：🚧 M1 开发中（周视图课表静态展示已实现，功能持续完善）
 
 ## ✨ 功能规划
 
@@ -39,7 +39,11 @@ ClassSchedule/
 │       ├── main/                     # 主代码
 │       │   ├── AndroidManifest.xml   # 应用清单
 │       │   ├── java/com/classschedule/app/
-│       │   │   └── MainActivity.kt   # 主页面（后续承载周视图课表）
+│       │   │   ├── MainActivity.kt       # 主页面
+│       │   │   ├── model/Course.kt       # 课程数据模型
+│       │   │   ├── data/JluTimeTable.kt  # 吉大作息时间表（12 节次）
+│       │   │   ├── data/SampleData.kt    # 示例课程数据
+│       │   │   └── ui/TimetableView.kt   # 自绘周视图控件
 │       │   └── res/                  # 资源文件
 │       │       ├── layout/           # 布局文件
 │       │       └── values/           # 字符串、主题等
@@ -71,13 +75,21 @@ git clone https://github.com/starryecho-T/ClassSchedule.git
 2. 连接手机（开启开发者模式 + USB 调试）或启动模拟器；
 3. 点击 Run ▶️ 安装运行。
 
-> 💡 提示：仓库暂未提交 Gradle Wrapper 二进制文件，如首次打开提示缺失，
-> 可在项目根目录执行 `gradle wrapper` 生成，或让 Android Studio 自动处理。
+> 💡 提示：仓库已包含 Gradle Wrapper（`gradlew` / `gradle-wrapper.jar`），首次 Sync 时
+> Gradle 会自动下载对应发行版；若网络较慢，可将 `gradle/wrapper/gradle-wrapper.properties`
+> 中的 `distributionUrl` 换成腾讯镜像地址。
+
+## 🎓 吉林大学适配
+
+- 作息时间表集中在 `app/src/main/java/com/classschedule/app/data/JluTimeTable.kt`，
+  默认为「上午 4 节 + 下午 4 节 + 晚上 4 节」共 12 节，可按校区实际作息修改；
+- 周视图按节次数自动排布，改作息无需改界面代码；
+- 示例数据中的教学楼名称（李四光楼、唐敖庆楼、经信教学楼等）仅作演示。
 
 ## 🗺 开发里程碑
 
 - [x] **M0** 项目骨架搭建（目录结构 / README / 工程配置）
-- [ ] **M1** 周视图课表静态展示
+- [x] **M1** 周视图课表静态展示（自绘 TimetableView、吉大作息、今日高亮）
 - [ ] **M2** 课程增删改查 + Room 持久化
 - [ ] **M3** 学期周次管理与当前周高亮
 - [ ] **M4** 课表导入导出

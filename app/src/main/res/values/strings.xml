@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">课表</string>
-    <string name="placeholder_hint">课表开发中，敬请期待 🚧</string>
+    <string name="timetable_title">第 %1$d 周课表</string>
+    <string name="timetable_subtitle">吉林大学 · 2026-2027 学年第一学期</string>
 </resources>
