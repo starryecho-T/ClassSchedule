@@ -7,4 +7,9 @@
         android:icon="@drawable/ic_calendar"
         android:title="@string/overview_title"
         app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_import"
+        android:title="@string/import_title"
+        app:showAsAction="never" />
 </menu>

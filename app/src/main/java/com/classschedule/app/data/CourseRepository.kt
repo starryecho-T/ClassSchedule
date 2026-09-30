@@ -45,6 +45,12 @@ class CourseRepository(
         seedPrefs.edit().putBoolean(flag, true).apply()
     }
 
+    /** 教务导入（M4）：全量替换现有课程。 */
+    suspend fun replaceAll(courses: List<Course>) {
+        dao.deleteAll()
+        dao.insertAll(courses.map { it.toEntity() })
+    }
+
     companion object {
         /** 内置课表数据版本（v2：思政实践/马原晚课 9-11 节，实际不上第 12 节）。 */
         private const val SEED_VERSION = 2

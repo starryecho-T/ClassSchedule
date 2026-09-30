@@ -14,6 +14,7 @@ import com.classschedule.app.data.TermCalendar
 import com.classschedule.app.model.Course
 import com.classschedule.app.ui.CourseDetailSheet
 import com.classschedule.app.ui.EditCourseActivity
+import com.classschedule.app.ui.ImportActivity
 import com.classschedule.app.ui.MainViewModel
 import com.classschedule.app.ui.ScheduleOverviewActivity
 import com.classschedule.app.ui.TimetableView
@@ -95,6 +96,10 @@ class MainActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_overview -> {
                 startActivity(Intent(this, ScheduleOverviewActivity::class.java))
+                true
+            }
+            R.id.action_import -> {
+                startActivity(Intent(this, ImportActivity::class.java))
                 true
             }
             else -> super.onOptionsItemSelected(item)

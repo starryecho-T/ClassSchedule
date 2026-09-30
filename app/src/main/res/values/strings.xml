@@ -50,4 +50,16 @@
     <string name="overview_subtitle_fmt">第 %1$d 周 · %2$d月%3$d日 周%4$s</string>
     <string name="overview_empty">这一天没有课</string>
     <string name="overview_time_fmt">%1$s~%2$s · 第%3$d-%4$d节</string>
+
+    <!-- M4 教务导入 -->
+    <string name="import_title">从教务导入</string>
+    <string name="import_hint">① 在下方登录教务系统（ieda.jlu.edu.cn）② 进入「我的课表」页面 ③ 点击「抓取解析」</string>
+    <string name="import_action_parse">抓取解析</string>
+    <string name="import_action_apply">导入课表</string>
+    <string name="import_parse_empty_page">页面尚未加载完成，请稍候重试</string>
+    <string name="import_parse_ok">已解析到 %1$d 条课程安排，请核对后点击「导入课表」</string>
+    <string name="import_parse_unsupported">暂未识别该页面结构，已保存快照：\n%1$s\n请将快照文件发回以补充解析规则</string>
+    <string name="import_snapshot_saved">页面快照已保存</string>
+    <string name="import_confirm">导入将清空现有课程并替换为解析出的 %1$d 条安排，确定继续吗？</string>
+    <string name="import_done">导入完成</string>
 </resources>
