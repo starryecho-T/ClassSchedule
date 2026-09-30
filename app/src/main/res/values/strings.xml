@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">课表</string>
     <string name="timetable_title">第 %1$d 周课表</string>
-    <string name="timetable_subtitle">吉林大学 · 2026-2027 学年第一学期</string>
+    <string name="timetable_subtitle">2026-2027 学年第一学期</string>
 
     <!-- M3 周次切换 -->
     <string name="week_label_fmt">第 %1$d 周</string>
