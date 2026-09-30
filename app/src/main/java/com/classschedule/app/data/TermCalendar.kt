@@ -11,8 +11,8 @@ import java.time.temporal.ChronoUnit
  */
 object TermCalendar {
 
-    /** 2026-2027 学年第一学期开学日（第 1 周周一）。 */
-    val TERM_START: LocalDate = LocalDate.of(2026, 8, 31)
+    /** 2026-2027 学年第一学期开学日（第 1 周周一，用户按校历核实：9/30 = 第 4 周周三）。 */
+    val TERM_START: LocalDate = LocalDate.of(2026, 9, 7)
 
     /** 学期总周数，与作息表一致。 */
     const val TOTAL_WEEKS: Int = JluTimeTable.TOTAL_WEEKS
