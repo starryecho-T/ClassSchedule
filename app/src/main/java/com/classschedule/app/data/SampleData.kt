@@ -3,13 +3,10 @@ package com.classschedule.app.data
 import com.classschedule.app.model.Course
 
 /**
- * M1 阶段的静态示例数据（吉林大学风格）。
- * M2 阶段将替换为 Room 数据库 + 用户自建课程。
+ * 首次启动的示例课程数据（吉林大学风格）。
+ * M3 起周次由 [TermCalendar] 按日期计算，不再使用硬编码值。
  */
 object SampleData {
-
-    /** 当前显示的周次（示例）。 */
-    const val CURRENT_WEEK: Int = 3
 
     val COURSES: List<Course> = listOf(
         // ---------- 周一 ----------

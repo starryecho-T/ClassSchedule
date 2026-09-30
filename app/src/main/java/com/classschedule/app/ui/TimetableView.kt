@@ -14,7 +14,9 @@ import android.view.MotionEvent
 import android.view.View
 import com.classschedule.app.data.JluTimeTable
 import com.classschedule.app.model.Course
+import java.time.LocalDate
 import java.util.Calendar
+import kotlin.math.abs
 import kotlin.math.max
 
 /**
@@ -35,7 +37,7 @@ class TimetableView @JvmOverloads constructor(
     private fun sp(v: Float) = v * scaledDensity + 0.5f
 
     private val timeColumnWidth = dp(44f)
-    private val headerHeight = dp(32f)
+    private val headerHeight = dp(40f)
     private val cellHeight = dp(64f)
     private val blockMargin = dp(2f)
     private val blockRadius = dp(6f)
@@ -58,8 +60,17 @@ class TimetableView @JvmOverloads constructor(
     // ---------- 数据 ----------
     private var courses: List<Course> = emptyList()
 
+    /** 当前周的 7 个具体日期（用于表头显示），size == 7 时才绘制。 */
+    private var weekDates: List<LocalDate> = emptyList()
+
+    /** 是否高亮“今天”列（仅当查看的是本周时为 true）。 */
+    private var highlightToday: Boolean = false
+
     /** 课程块被点击时的回调（用于进入编辑页）。 */
     var onCourseClick: ((Course) -> Unit)? = null
+
+    /** 横向滑动切换周次：-1 = 上一周，+1 = 下一周。 */
+    var onWeekSwipe: ((Int) -> Unit)? = null
 
     // ---------- 画笔 ----------
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -85,6 +96,10 @@ class TimetableView @JvmOverloads constructor(
         textSize = sp(12f)
         isFakeBoldText = true
     }
+    private val datePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+        textSize = sp(9f)
+    }
     private val courseNamePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = sp(10f)
         isFakeBoldText = true
@@ -93,9 +108,22 @@ class TimetableView @JvmOverloads constructor(
         textSize = sp(8f)
     }
 
-    /** 注入课程数据与当前周次，控件只绘制本周课程（借鉴 zfman 周次过滤设计）。 */
-    fun setup(courses: List<Course>, currentWeek: Int) {
-        this.courses = courses.filter { it.isThisWeek(currentWeek) }
+    /**
+     * 注入课程数据与所查看的周次，控件只绘制该周课程。
+     *
+     * @param selectedWeek  当前查看的周次
+     * @param dates         该周的 7 个具体日期（表头显示），空列表则只画星期
+     * @param isCurrentWeek 该周是否为本周（控制“今天”列高亮）
+     */
+    fun setup(
+        courses: List<Course>,
+        selectedWeek: Int,
+        dates: List<LocalDate> = emptyList(),
+        isCurrentWeek: Boolean = false,
+    ) {
+        this.courses = courses.filter { it.isThisWeek(selectedWeek) }
+        this.weekDates = dates
+        this.highlightToday = isCurrentWeek
         requestLayout()
         invalidate()
     }
@@ -122,8 +150,8 @@ class TimetableView @JvmOverloads constructor(
         val colWidth = (width - timeColumnWidth) / 7f
         val todayCol = todayColumn()
 
-        // 1. 今日列背景
-        if (todayCol in 1..7) {
+        // 1. 今日列背景（仅查看本周时）
+        if (highlightToday && todayCol in 1..7) {
             fillPaint.color = todayColumnColor
             val left = timeColumnWidth + (todayCol - 1) * colWidth
             canvas.drawRect(left, 0f, left + colWidth, height.toFloat(), fillPaint)
@@ -141,23 +169,31 @@ class TimetableView @JvmOverloads constructor(
             canvas.drawLine(x, 0f, x, height.toFloat(), gridPaint)
         }
 
-        // 3. 表头：周一 ~ 周日
-        val dayBaseline = headerHeight / 2f - (dayPaint.descent() + dayPaint.ascent()) / 2f
+        // 3. 表头：周一~周日 + 该周具体日期（两行）
+        val dayBaseY = dp(16f) - (dayPaint.descent() + dayPaint.ascent()) / 2f
+        val dateBaseY = dp(31f) - (datePaint.descent() + datePaint.ascent()) / 2f
         for (day in 1..7) {
             val cx = timeColumnWidth + (day - 1) * colWidth + colWidth / 2f
-            if (day == todayCol) {
+            val isToday = highlightToday && day == todayCol
+            if (isToday) {
                 fillPaint.color = todayPillColor
                 val pillW = colWidth - dp(12f)
                 val pillH = headerHeight - dp(8f)
                 canvas.drawRoundRect(
                     RectF(cx - pillW / 2f, dp(4f), cx + pillW / 2f, dp(4f) + pillH),
-                    dp(8f), dp(8f), fillPaint
+                    dp(10f), dp(10f), fillPaint
                 )
                 dayPaint.color = 0xFFFFFFFF.toInt()
+                datePaint.color = 0xE6FFFFFF.toInt()
             } else {
                 dayPaint.color = labelColor
+                datePaint.color = labelColor
             }
-            canvas.drawText("周" + dayNames[day - 1], cx, dayBaseline, dayPaint)
+            canvas.drawText("周" + dayNames[day - 1], cx, dayBaseY, dayPaint)
+            if (weekDates.size == 7) {
+                val d = weekDates[day - 1]
+                canvas.drawText("${d.monthValue}/${d.dayOfMonth}", cx, dateBaseY, datePaint)
+            }
         }
 
         // 4. 左侧节次 + 上下课时间
@@ -216,9 +252,26 @@ class TimetableView @JvmOverloads constructor(
         }
     }
 
+    // ---------- 触摸：点击课程块 / 横滑切换周次 ----------
+    private var downX = 0f
+    private var downY = 0f
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_UP) {
-            hitCourse(event.x, event.y)?.let { onCourseClick?.invoke(it) }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.x
+                downY = event.y
+            }
+            MotionEvent.ACTION_UP -> {
+                val dx = event.x - downX
+                val dy = event.y - downY
+                if (abs(dx) > dp(60f) && abs(dx) > abs(dy) * 2f) {
+                    // 左滑 -> 下一周，右滑 -> 上一周
+                    onWeekSwipe?.invoke(if (dx < 0) 1 else -1)
+                } else {
+                    hitCourse(event.x, event.y)?.let { onCourseClick?.invoke(it) }
+                }
+            }
         }
         return true
     }

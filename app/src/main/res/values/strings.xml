@@ -3,6 +3,13 @@
     <string name="timetable_title">第 %1$d 周课表</string>
     <string name="timetable_subtitle">吉林大学 · 2026-2027 学年第一学期</string>
 
+    <!-- M3 周次切换 -->
+    <string name="week_label_fmt">第 %1$d 周</string>
+    <string name="week_label_current">第 %1$d 周 · 本周</string>
+    <string name="action_prev_week">‹</string>
+    <string name="action_next_week">›</string>
+    <string name="action_today">今天</string>
+
     <!-- M2 课程编辑 -->
     <string name="edit_course_new">添加课程</string>
     <string name="edit_course_edit">编辑课程</string>
