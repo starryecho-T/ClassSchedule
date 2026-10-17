@@ -1,6 +1,9 @@
 package com.classschedule.app
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -8,13 +11,17 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.classschedule.app.data.TermCalendar
 import com.classschedule.app.model.Course
+import com.classschedule.app.reminder.ReminderReceiver
 import com.classschedule.app.ui.CourseDetailSheet
 import com.classschedule.app.ui.EditCourseActivity
 import com.classschedule.app.ui.ImportActivity
@@ -35,6 +42,13 @@ class MainActivity : AppCompatActivity() {
 
     private val viewModel: MainViewModel by viewModels { MainViewModel.Factory }
 
+    /** M5-2：通知权限请求结果 —— 授权后立即重算提醒闹钟。 */
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val message = if (granted) R.string.reminder_granted else R.string.reminder_denied
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        if (granted) ReminderReceiver.reschedule(this)
+    }
+
     /** 当前正在查看的周次（1..总周数），默认定位到本周。 */
     private var selectedWeek: Int = TermCalendar.currentWeek().coerceIn(1, TermCalendar.TOTAL_WEEKS)
 
@@ -52,6 +66,13 @@ class MainActivity : AppCompatActivity() {
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
+
+        // M5-2：Android 13+ 首次进入请求通知权限（上课提醒依赖）；只请求一次。
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         timetable = findViewById(R.id.timetable)
         // 点击课程块 -> 详情弹窗（不再直接进编辑页，借鉴 thu-info 交互）
