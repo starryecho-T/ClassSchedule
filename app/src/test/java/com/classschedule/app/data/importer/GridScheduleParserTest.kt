@@ -124,4 +124,43 @@ class GridScheduleParserTest {
         val cards = (1..301).map { card(1, 1, 2, "课$it", "师", "1-17周,星期1,第1节-第2节,楼") }
         assertBlocked(GridScheduleParser.parse(cards))
     }
+
+    /** 真实场景 2026-10-17：实验课按具体日期排课，卡片名为「10月13日」，时间无周次无星期。 */
+    @Test fun dateNamedLabCourseDerivesWeekFromDate() {
+        val result = GridScheduleParser.parse(
+            listOf(
+                card(1, 1, 2, "概率论与数理统计B[07]", "李亚军", "1-17周,星期1,第1节-第2节,前卫-李四光楼-206（地学优先）"),
+                // 10月13日 = 第 6 周周二；格子属性 week=2，节次 1-8。
+                card(2, 1, 8, "10月13日", "机能科学实验平台", "第1节-第8节,机能科学实验平台309"),
+                card(2, 1, 8, "10月13日", "机能科学实验平台", "第1节-第8节,机能科学实验平台306"),
+            ),
+        )
+        assertTrue(result.issues.toString(), result.canImport)
+        assertEquals(3, result.courses.size)
+        val lab = result.courses[1]
+        assertEquals(2, lab.dayOfWeek)
+        assertEquals(1..8, lab.startPeriod..lab.endPeriod)
+        assertEquals(setOf(6), lab.weeks)
+        assertEquals("机能科学实验平台309", lab.room)
+        assertTrue(lab.name.contains("10月13日"))
+    }
+
+    /** 日期与格子位置矛盾时必须拒绝，不能猜。 */
+    @Test fun dateNamedCardPositionMismatchBlocks() {
+        assertBlocked(
+            GridScheduleParser.parse(
+                // 10月13日是周二（week=2），故意放 week=5。
+                listOf(card(5, 1, 8, "10月13日", "师", "第1节-第8节,实验室")),
+            ),
+        )
+    }
+
+    /** 非日期命名的无周次卡片依旧整批拒绝。 */
+    @Test fun weeklessNonDateCardStillBlocked() {
+        assertBlocked(
+            GridScheduleParser.parse(
+                listOf(card(1, 1, 2, "普通课", "师", "星期1,第1节-第2节,楼")),
+            ),
+        )
+    }
 }

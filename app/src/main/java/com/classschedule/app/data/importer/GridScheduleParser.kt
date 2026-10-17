@@ -69,25 +69,63 @@ object GridScheduleParser {
             weeks += parts[cursor]
             cursor++
         }
-        if (weeks.isEmpty()) throw InvalidCard("$location：缺少上课周次（“${card.time.take(40)}”）。")
+        // 实验课等按具体日期排课：卡片名是「X月X日」且时间无周次时，
+        // 用格子位置（星期 + 当前学期校历）反推周次，日期并入课程名保留信息。
+        val dateName = dateOnlyName.find(card.name)?.groupValues
+        if (weeks.isEmpty()) {
+            if (dateName == null || card.week == 0) {
+                throw InvalidCard("$location：缺少上课周次（“${card.time.take(40)}”）。")
+            }
+            val derived = deriveWeekFromDate(dateName)
+            if (derived == null || derived != card.week) {
+                throw InvalidCard("$location：日期「${dateName[1]}月${dateName[2]}日」与卡片位置（星期${card.week}）不符。")
+            }
+            weeks += derived.toString()
+        }
         val dayText = if (cursor < parts.size && daySegment.matches(parts[cursor])) parts[cursor++] else ""
-        if (dayText.isEmpty()) throw InvalidCard("$location：缺少上课星期（“${card.time.take(40)}”）。")
+        // 日期排课的时间文本可能不含星期：星期由格子位置或日期给出。
+        val effectiveDay = dayText.ifEmpty {
+            card.week.takeIf { it in 1..7 }?.let { "星期$it" } ?: throw InvalidCard("$location：缺少上课星期（“${card.time.take(40)}”）。")
+        }
         val periodText = if (cursor < parts.size && periodSegment.matches(parts[cursor])) parts[cursor++] else ""
         if (periodText.isEmpty()) throw InvalidCard("$location：缺少上课节次（“${card.time.take(40)}”）。")
         val room = parts.drop(cursor).filter { it.isNotEmpty() }.joinToString(",")
         if (daySegment.containsMatchIn(room) || periodSegment.containsMatchIn(room)) {
             throw InvalidCard("$location：含有多组上课时间，无法确定唯一安排。")
         }
-        verifyAttributes(card, dayText, periodText, location)
+        verifyAttributes(card, effectiveDay, periodText, location)
+        val displayName = if (dateName == null) {
+            card.name.replaceFirst(classNumberSuffix, "").ifBlank { card.name }
+        } else {
+            // 去掉「X月X日」后若还有残留（如「机能实验10月13日」）保留原名；纯日期名补上学期上下文。
+            val residue = card.name.replace(dateOnlyName, "").trim()
+            if (residue.isBlank()) "课程(${dateName[1]}月${dateName[2]}日)" else "${residue}(${dateName[1]}月${dateName[2]}日)"
+        }
         return listOf(
-            card.name.replaceFirst(classNumberSuffix, "").ifBlank { card.name },
+            displayName,
             card.teacher,
-            dayText,
+            effectiveDay,
             periodText.let(digits::findAll).joinToString("-") { it.value },
             // 下游 NUMBERS 正则只接受一个可选的尾部“周”，离散段落必须剥掉各自的“周”再拼接。
             weeks.joinToString(",") { it.removePrefix("第").removeSuffix("周") },
             room,
         )
+    }
+
+    /** 「10月13日」这类纯日期课程名（实验课按具体日期排课）。 */
+    private val dateOnlyName = Regex("""^\s*(?:实验|课程)?\s*(\d{1,2})月(\d{1,2})日\s*$""")
+
+    /** 用学期开学日把日期换算成周次；不在学期内或参数异常返回 null。 */
+    private fun deriveWeekFromDate(groups: MatchGroupCollection): Int? {
+        val month = groups[1]?.value?.toIntOrNull() ?: return null
+        val day = groups[2]?.value?.toIntOrNull() ?: return null
+        val start = com.classschedule.app.data.TermCalendar.TERM_START
+        val date = runCatching { java.time.LocalDate.of(start.year, month, day) }.getOrNull()
+            // 跨年学期：秋季月份小于春季时按下一年解释。
+            ?: runCatching { java.time.LocalDate.of(start.year + 1, month, day) }.getOrNull()
+            ?: return null
+        val week = com.classschedule.app.data.TermCalendar.currentWeek(date)
+        return week.takeIf { it in 1..com.classschedule.app.data.TermCalendar.TOTAL_WEEKS }
     }
 
     /**
