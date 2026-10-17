@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hidden_courses_title">已隐藏课程</string>
+    <string name="hidden_courses_empty">暂无已隐藏课程。隐藏过部分或全部周次的课程都会显示在这里，点击课程即可恢复显示。</string>
+    <string name="hidden_course_details">周%1$s · 第%2$d-%3$d节\n已隐藏：第%4$s周\n教师：%5$s · 地点：%6$s</string>
+    <string name="hidden_course_weeks_note">已隐藏：第%1$s周</string>
+    <string name="course_loading">正在加载课程，请稍候</string>
+    <string name="course_load_failed">课程加载失败，请返回后重试</string>
+    <string name="course_not_found">这门课程已不存在</string>
+    <string name="course_save_failed">保存失败，请重试</string>
+    <string name="course_delete_failed">删除失败，请重试</string>
+    <string name="course_week_selection_empty">所选范围内没有符合单双周条件的周次，请调整周次范围或选择每周</string>
+    <string name="course_original_weeks_notice">保留原有周次：第%1$s周。修改周次范围或单双周后，将按新设置生成周次。</string>
+</resources>

@@ -19,7 +19,7 @@ object TermCalendar {
 
     /** 今天是第几周（学期外可能返回 <=0 或 > 总周数，调用方自行 clamp）。 */
     fun currentWeek(today: LocalDate = LocalDate.now()): Int =
-        ChronoUnit.WEEKS.between(TERM_START, today).toInt() + 1
+        Math.floorDiv(ChronoUnit.DAYS.between(TERM_START, today), 7L).toInt() + 1
 
     /** 第 [week] 周的 7 个日期（下标 0=周一 ... 6=周日）。 */
     fun weekDates(week: Int): List<LocalDate> {

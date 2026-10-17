@@ -12,4 +12,9 @@
         android:id="@+id/action_import"
         android:title="@string/import_title"
         app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_hidden_courses"
+        android:title="@string/hidden_courses_title"
+        app:showAsAction="never" />
 </menu>

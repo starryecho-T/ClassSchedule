@@ -4,6 +4,9 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.TextView
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -21,6 +24,7 @@ import com.classschedule.app.ui.TimetableView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 
 /**
@@ -42,6 +46,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        selectedWeek = savedInstanceState?.getInt(STATE_SELECTED_WEEK, selectedWeek)
+            ?.coerceIn(1, TermCalendar.TOTAL_WEEKS) ?: selectedWeek
         setContentView(R.layout.activity_main)
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
@@ -86,7 +92,12 @@ class MainActivity : AppCompatActivity() {
         updateWeekUi()
     }
 
-    /** 顶栏菜单：日程概览入口（M4）。 */
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt(STATE_SELECTED_WEEK, selectedWeek)
+        super.onSaveInstanceState(outState)
+    }
+
+    /** 顶栏菜单：日程概览、教务导入和隐藏课程管理。 */
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
         return true
@@ -102,8 +113,51 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(this, ImportActivity::class.java))
                 true
             }
+            R.id.action_hidden_courses -> {
+                showHiddenCourses()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    /** 全部隐藏的课程也保留管理入口，点击后可在原详情页恢复。 */
+    private fun showHiddenCourses() {
+        val hiddenCourses = latestCourses.filter { it.hiddenWeeks.isNotEmpty() }
+            .sortedWith(compareBy(Course::dayOfWeek, Course::startPeriod, Course::endPeriod, Course::name, Course::id))
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.hidden_courses_title)
+            .setNegativeButton(android.R.string.cancel, null)
+        if (hiddenCourses.isEmpty()) {
+            dialog.setMessage(R.string.hidden_courses_empty).show()
+            return
+        }
+        val adapter = object : ArrayAdapter<Course>(this, android.R.layout.simple_list_item_2, hiddenCourses) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val view = convertView ?: layoutInflater.inflate(android.R.layout.simple_list_item_2, parent, false)
+                val course = hiddenCourses[position]
+                view.findViewById<TextView>(android.R.id.text1).apply {
+                    text = course.name
+                    setSingleLine(false)
+                    maxLines = 2
+                }
+                view.findViewById<TextView>(android.R.id.text2).apply {
+                    text = getString(
+                        R.string.hidden_course_details,
+                        "一二三四五六日".getOrNull(course.dayOfWeek - 1)?.toString().orEmpty(),
+                        course.startPeriod,
+                        course.endPeriod,
+                        course.hiddenWeeks.sorted().joinToString("、"),
+                        course.teacher.ifBlank { getString(R.string.sheet_empty_hint) },
+                        course.room.ifBlank { getString(R.string.sheet_empty_hint) },
+                    )
+                    setSingleLine(false)
+                    maxLines = Int.MAX_VALUE
+                }
+                return view
+            }
+        }
+        dialog.setAdapter(adapter) { _, position -> showCourseDetail(hiddenCourses[position]) }.show()
     }
 
     /** 课程详情底部弹窗：查看信息 + 编辑 / 删除 / 隐藏（M3）。 */
@@ -148,6 +202,10 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.week_label_fmt, selectedWeek)
         }
+    }
+
+    companion object {
+        private const val STATE_SELECTED_WEEK = "selected_week"
     }
 }
 

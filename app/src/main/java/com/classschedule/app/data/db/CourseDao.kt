@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -33,6 +34,22 @@ interface CourseDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(courses: List<CourseEntity>)
+
+    /** 同一事务内检查和填充，已有任意课程时不修改数据库。 */
+    @Transaction
+    suspend fun insertIfEmpty(courses: List<CourseEntity>): Boolean {
+        if (courses.isEmpty() || count() != 0) return false
+        insertAll(courses)
+        return true
+    }
+
+    /** 插入失败时 Room 回滚删除；空导入不得清空用户课表。 */
+    @Transaction
+    suspend fun replaceAll(courses: List<CourseEntity>) {
+        require(courses.isNotEmpty()) { "导入课表为空，未修改现有课程" }
+        deleteAll()
+        insertAll(courses)
+    }
 
     @Delete
     suspend fun delete(course: CourseEntity)

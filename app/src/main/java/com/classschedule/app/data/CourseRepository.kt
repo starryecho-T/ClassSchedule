@@ -5,8 +5,13 @@ import com.classschedule.app.data.db.CourseDao
 import com.classschedule.app.data.db.toDomain
 import com.classschedule.app.data.db.toEntity
 import com.classschedule.app.model.Course
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * 课程数据仓库：隔离 UI 与数据库实现（分层思想参考 thu-info-app 的 lib/App 解耦设计）。
@@ -26,33 +31,55 @@ class CourseRepository(
     suspend fun getById(id: Long): Course? = dao.getById(id)?.toDomain()
 
     /** 有 id 更新、无 id 插入。 */
-    suspend fun upsert(course: Course): Long = dao.upsert(course.toEntity())
-
-    suspend fun delete(course: Course) = dao.delete(course.toEntity())
-
-    suspend fun deleteById(id: Long) = dao.deleteById(id)
-
-    /**
-     * 预填真实课表。按 [SEED_VERSION] 用 SharedPreferences 记忆：每个数据版本只在
-     * 升级后首次启动时执行一次全量替换（覆盖旧示例/测试数据），此后用户的任何
-     * 增删改都不会再被覆盖；未来更新内置课表时递增 [SEED_VERSION] 即可再刷一次。
-     */
-    suspend fun seedIfEmpty(sample: List<Course> = SampleData.COURSES) {
-        val flag = "seeded_v$SEED_VERSION"
-        if (seedPrefs.getBoolean(flag, false)) return
-        dao.deleteAll()
-        dao.insertAll(sample.map { it.toEntity() })
-        seedPrefs.edit().putBoolean(flag, true).apply()
+    suspend fun upsert(course: Course): Long = mutationMutex.withLock {
+        markInitialized()
+        dao.upsert(course.toEntity())
     }
 
-    /** 教务导入（M4）：全量替换现有课程。 */
-    suspend fun replaceAll(courses: List<Course>) {
-        dao.deleteAll()
-        dao.insertAll(courses.map { it.toEntity() })
+    suspend fun delete(course: Course) = mutationMutex.withLock {
+        // 先记住用户已接管课表，删除最后一门课后也不能重新填充示例。
+        markInitialized()
+        dao.delete(course.toEntity())
+    }
+
+    suspend fun deleteById(id: Long) = mutationMutex.withLock {
+        markInitialized()
+        dao.deleteById(id)
+    }
+
+    /**
+     * 仅首次使用且数据库为空时预填内置课表。
+     * 兼容旧版本的 seeded_vN 标记；升级内置数据不会覆盖用户课程，
+     * 用户主动删空后也不会重新填充。空库检查和插入由 DAO 在同一事务内完成。
+     */
+    suspend fun seedIfEmpty(sample: List<Course> = SampleData.COURSES) = mutationMutex.withLock {
+        if (SeedPolicy.hasInitialized(seedPrefs.all)) return@withLock
+        if (sample.isEmpty()) return@withLock
+        dao.insertIfEmpty(sample.map { it.toEntity() })
+        // 填充成功后才标记，插入失败仍可重试；已有课程也视为完成初始化。
+        // 一旦 DAO 已返回，协程取消也应允许这次状态持久化完成。
+        withContext(NonCancellable) { markInitialized() }
+    }
+
+    /** 教务导入：原子替换，解析出空列表时保留已有课程并报告错误。 */
+    suspend fun replaceAll(courses: List<Course>) = mutationMutex.withLock {
+        require(courses.isNotEmpty()) { "导入课表为空，未修改现有课程" }
+        markInitialized()
+        dao.replaceAll(courses.map { it.toEntity() })
+    }
+
+    private suspend fun markInitialized() {
+        if (seedPrefs.getBoolean(SeedPolicy.INITIALIZED_KEY, false)) return
+        withContext(Dispatchers.IO) {
+            // 用户操作先持久化状态，避免数据库已提交后再因状态写盘失败而误报。
+            check(seedPrefs.edit().putBoolean(SeedPolicy.INITIALIZED_KEY, true).commit()) {
+                "无法保存课表初始化状态，请稍后重试"
+            }
+        }
     }
 
     companion object {
-        /** 内置课表数据版本（v2：思政实践/马原晚课 9-11 节，实际不上第 12 节）。 */
-        private const val SEED_VERSION = 2
+        // Activity 和 Application 各自持有仓库实例，共享锁才能保护启动初始化。
+        private val mutationMutex = Mutex()
     }
 }

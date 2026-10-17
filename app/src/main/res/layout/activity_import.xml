@@ -45,6 +45,16 @@
         android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="12sp" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_import_snapshot"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:enabled="false"
+        android:text="@string/import_export_snapshot" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

@@ -1,0 +1,15 @@
+<resources>
+    <string name="import_page_loading">页面已切换，请进入课表页面后重新抓取</string>
+    <string name="import_page_failed">页面加载失败，请检查网络后重新打开教务导入</string>
+    <string name="import_capturing">正在抓取和解析，请稍候…</string>
+    <string name="import_unsupported_with_export">当前版本尚未适配该教务页面，现有课表未改变。可点击“导出页面快照”，为后续适配保存页面样本。</string>
+    <string name="import_capture_failed">抓取或保存快照失败，请重试。现有课表未改变。</string>
+    <string name="import_preview_title">核对导入课程</string>
+    <string name="import_preview_more">\n\n另有 %1$d 条安排</string>
+    <string name="import_applying">正在保存课表，请稍候…</string>
+    <string name="import_apply_failed">导入未完成，原课表已保留，请重试。</string>
+    <string name="import_export_snapshot">导出页面快照</string>
+    <string name="import_export_notice">快照包含当前页面的 HTML，可能含姓名、学号、课程和登录相关信息。仅保存到你选择的位置；如需分享，请先移除个人信息及登录信息。</string>
+    <string name="import_export_done">快照已导出到所选位置</string>
+    <string name="import_export_failed">快照导出失败，请重新抓取后重试</string>
+</resources>

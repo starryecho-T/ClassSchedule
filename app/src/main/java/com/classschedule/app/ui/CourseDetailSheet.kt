@@ -60,7 +60,9 @@ class CourseDetailSheet(
             hiddenNote.visibility = View.VISIBLE
             restoreBtn.visibility = View.VISIBLE
             hiddenNote.text =
-                context.getString(R.string.sheet_hidden_note, course.hiddenWeeks.size)
+                context.getString(
+                    R.string.hidden_course_weeks_note, course.hiddenWeeks.sorted().joinToString("、"),
+                )
         }
 
         findViewById<MaterialButton>(R.id.btn_edit)!!.setOnClickListener {
@@ -73,11 +75,13 @@ class CourseDetailSheet(
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }
-        findViewById<MaterialButton>(R.id.btn_hide_once)!!.setOnClickListener {
-            dismiss(); onHideWeeks(setOf(selectedWeek))
+        findViewById<MaterialButton>(R.id.btn_hide_once)!!.apply {
+            isEnabled = course.isThisWeek(selectedWeek)
+            setOnClickListener { dismiss(); onHideWeeks(setOf(selectedWeek)) }
         }
-        findViewById<MaterialButton>(R.id.btn_hide_all)!!.setOnClickListener {
-            dismiss(); onHideWeeks(course.weeks)
+        findViewById<MaterialButton>(R.id.btn_hide_all)!!.apply {
+            isEnabled = course.weeks.any { it !in course.hiddenWeeks }
+            setOnClickListener { dismiss(); onHideWeeks(course.weeks) }
         }
         restoreBtn.setOnClickListener {
             dismiss(); onRestore()

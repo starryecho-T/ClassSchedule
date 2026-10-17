@@ -43,19 +43,35 @@ data class Course(
         /** 双周，如 [evenWeeks](2..16) = 2,4,...,16。 */
         fun evenWeeks(range: IntRange): Set<Int> = range.filter { it % 2 == 0 }.toSet()
 
-        /** 周次集合的可读文本：如「1-16周」「1-15周单周」「1-16周(部分)」。 */
+        /** 周次集合的可读文本：如「1-16周」「1-15周单周」「1-3、5、8-9周」。 */
         fun weeksText(weeks: Set<Int>): String {
             if (weeks.isEmpty()) return ""
             val sorted = weeks.sorted()
             val first = sorted.first()
             val last = sorted.last()
-            val contiguous = sorted == (first..last).toList()
+            val contiguous = sorted.zipWithNext().all { (a, b) -> b - a == 1 }
+            val alternating = sorted.zipWithNext().all { (a, b) -> b - a == 2 }
             return when {
                 weeks.size == 1 -> "第${first}周"
-                contiguous && sorted.all { it % 2 == 1 } -> "${first}-${last}周单周"
-                contiguous && sorted.all { it % 2 == 0 } -> "${first}-${last}周双周"
+                alternating && first % 2 == 1 -> "${first}-${last}周单周"
+                alternating && first % 2 == 0 -> "${first}-${last}周双周"
                 contiguous -> "${first}-${last}周"
-                else -> "${first}-${last}周(部分)"
+                else -> {
+                    val ranges = mutableListOf<String>()
+                    var start = first
+                    var end = first
+                    for (week in sorted.drop(1)) {
+                        if (week == end + 1) {
+                            end = week
+                        } else {
+                            ranges += if (start == end) "$start" else "$start-$end"
+                            start = week
+                            end = week
+                        }
+                    }
+                    ranges += if (start == end) "$start" else "$start-$end"
+                    ranges.joinToString("、") + "周"
+                }
             }
         }
     }

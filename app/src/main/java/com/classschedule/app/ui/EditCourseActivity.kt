@@ -8,6 +8,7 @@ import android.util.TypedValue
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.NumberPicker
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -21,6 +22,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.textfield.TextInputEditText
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -34,6 +36,10 @@ class EditCourseActivity : AppCompatActivity() {
     private var courseId = 0L
     private var selectedDay = 0        // 1..7，0 = 未选
     private var selectedColor = 0
+    private var isLoading = false
+    private var isSaving = false
+    private var originalWeeks: Set<Int> = emptySet()
+    private var originalWeekSelection: CourseWeekSelection? = null
     /** 编辑模式下保留既有的隐藏周次（隐藏状态不应因编辑信息而丢失）。 */
     private var hiddenWeeks: Set<Int> = emptySet()
     private val dayButtons = mutableListOf<MaterialButton>()
@@ -47,13 +53,16 @@ class EditCourseActivity : AppCompatActivity() {
     private lateinit var npFromWeek: NumberPicker
     private lateinit var npToWeek: NumberPicker
     private lateinit var weekModeGroup: MaterialButtonToggleGroup
+    private lateinit var toolbar: MaterialToolbar
+    private lateinit var originalWeeksNotice: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_edit_course)
         courseId = intent.getLongExtra(EXTRA_COURSE_ID, 0L)
+        isLoading = courseId != 0L
 
-        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        toolbar = findViewById(R.id.toolbar)
         toolbar.title =
             getString(if (courseId == 0L) R.string.edit_course_new else R.string.edit_course_edit)
         toolbar.setNavigationOnClickListener { finish() }
@@ -68,6 +77,7 @@ class EditCourseActivity : AppCompatActivity() {
         }
 
         bindViews()
+        updateEditorEnabled()
         if (courseId != 0L) loadExisting() else applyPrefill()
     }
 
@@ -88,6 +98,17 @@ class EditCourseActivity : AppCompatActivity() {
 
         buildDayButtons(findViewById(R.id.day_group))
         buildColorRow(findViewById(R.id.color_row))
+
+        originalWeeksNotice = TextView(this).apply {
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+            setPadding(0, dp(8), 0, 0)
+            visibility = View.GONE
+        }
+        val form = weekModeGroup.parent as LinearLayout
+        form.addView(originalWeeksNotice, form.indexOfChild(weekModeGroup) + 1)
+        npFromWeek.setOnValueChangedListener { _, _, _ -> updateOriginalWeeksNotice() }
+        npToWeek.setOnValueChangedListener { _, _, _ -> updateOriginalWeeksNotice() }
+        weekModeGroup.addOnButtonCheckedListener { _, _, _ -> updateOriginalWeeksNotice() }
     }
 
     /** 星期按钮组（一~日）由代码生成，避免 XML 冗长。 */
@@ -137,32 +158,45 @@ class EditCourseActivity : AppCompatActivity() {
     /** 编辑模式：从数据库回填已有课程。 */
     private fun loadExisting() {
         lifecycleScope.launch {
-            val course = repo.getById(courseId)
-            if (course == null) {
-                finish()
-                return@launch
-            }
-            etName.setText(course.name)
-            etTeacher.setText(course.teacher)
-            etRoom.setText(course.room)
-            hiddenWeeks = course.hiddenWeeks
-            npStart.value = course.startPeriod
-            npEnd.value = course.endPeriod
-            selectedDay = course.dayOfWeek
-            dayButtons.getOrNull(course.dayOfWeek - 1)?.isChecked = true
-            val weeks = course.weeks.sorted()
-            if (weeks.isNotEmpty()) {
-                npFromWeek.value = weeks.first()
-                npToWeek.value = weeks.last()
-            }
-            weekModeGroup.check(
-                when {
-                    weeks.size > 1 && weeks.all { it % 2 == 1 } -> R.id.btn_mode_odd
-                    weeks.size > 1 && weeks.all { it % 2 == 0 } -> R.id.btn_mode_even
-                    else -> R.id.btn_mode_all
+            try {
+                val course = repo.getById(courseId)
+                if (course == null) {
+                    toast(R.string.course_not_found)
+                    finish()
+                    return@launch
                 }
-            )
-            selectColor(course.colorIndex)
+                etName.setText(course.name)
+                etTeacher.setText(course.teacher)
+                etRoom.setText(course.room)
+                hiddenWeeks = course.hiddenWeeks
+                originalWeeks = course.weeks
+                npStart.value = course.startPeriod
+                npEnd.value = course.endPeriod
+                selectedDay = course.dayOfWeek
+                dayButtons.getOrNull(course.dayOfWeek - 1)?.isChecked = true
+                val selection = CourseWeekSelection.fromWeeks(course.weeks)
+                if (selection != null) {
+                    npFromWeek.value = selection.fromWeek
+                    npToWeek.value = selection.toWeek
+                    weekModeGroup.check(
+                        when (selection.mode) {
+                            CourseWeekSelection.Mode.ODD -> R.id.btn_mode_odd
+                            CourseWeekSelection.Mode.EVEN -> R.id.btn_mode_even
+                            CourseWeekSelection.Mode.ALL -> R.id.btn_mode_all
+                        }
+                    )
+                }
+                originalWeekSelection = currentWeekSelection()
+                selectColor(course.colorIndex)
+                isLoading = false
+                updateEditorEnabled()
+                updateOriginalWeeksNotice()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                toast(R.string.course_load_failed)
+                finish()
+            }
         }
     }
 
@@ -181,18 +215,18 @@ class EditCourseActivity : AppCompatActivity() {
     }
 
     private fun save() {
+        if (isLoading) return toast(R.string.course_loading)
+        if (isSaving) return
+        // 提交 NumberPicker 中仍处于输入状态的数字后再校验。
+        currentFocus?.clearFocus()
         val name = etName.text?.toString()?.trim().orEmpty()
         if (name.isEmpty()) return toast(R.string.toast_name_empty)
         if (selectedDay == 0) return toast(R.string.toast_day_required)
         if (npStart.value > npEnd.value) return toast(R.string.toast_period_invalid)
         if (npFromWeek.value > npToWeek.value) return toast(R.string.toast_week_invalid)
 
-        val range = npFromWeek.value..npToWeek.value
-        val weeks = when (weekModeGroup.checkedButtonId) {
-            R.id.btn_mode_odd -> range.filter { it % 2 == 1 }.toSet()
-            R.id.btn_mode_even -> range.filter { it % 2 == 0 }.toSet()
-            else -> range.toSet()
-        }
+        val weeks = currentWeekSelection().weeksForSave(originalWeeks, originalWeekSelection)
+        if (weeks.isEmpty()) return toast(R.string.course_week_selection_empty)
         val course = Course(
             name = name,
             teacher = etTeacher.text?.toString()?.trim().orEmpty(),
@@ -202,26 +236,83 @@ class EditCourseActivity : AppCompatActivity() {
             endPeriod = npEnd.value,
             weeks = weeks,
             colorIndex = selectedColor,
-            hiddenWeeks = hiddenWeeks,
+            hiddenWeeks = hiddenWeeks.intersect(weeks),
             id = courseId,
         )
+        isSaving = true
+        updateEditorEnabled()
         lifecycleScope.launch {
-            repo.upsert(course)
-            finish()
+            try {
+                repo.upsert(course)
+                finish()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                toast(R.string.course_save_failed)
+                isSaving = false
+                updateEditorEnabled()
+            }
         }
     }
 
     private fun confirmDelete() {
+        if (isLoading || isSaving || courseId == 0L) return
         AlertDialog.Builder(this)
             .setMessage(R.string.delete_confirm)
             .setPositiveButton(R.string.action_delete) { _, _ ->
+                if (isLoading || isSaving) return@setPositiveButton
+                isSaving = true
+                updateEditorEnabled()
                 lifecycleScope.launch {
-                    repo.deleteById(courseId)
-                    finish()
+                    try {
+                        repo.deleteById(courseId)
+                        finish()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        toast(R.string.course_delete_failed)
+                        isSaving = false
+                        updateEditorEnabled()
+                    }
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun currentWeekSelection() = CourseWeekSelection(
+        fromWeek = npFromWeek.value,
+        toWeek = npToWeek.value,
+        mode = when (weekModeGroup.checkedButtonId) {
+            R.id.btn_mode_odd -> CourseWeekSelection.Mode.ODD
+            R.id.btn_mode_even -> CourseWeekSelection.Mode.EVEN
+            else -> CourseWeekSelection.Mode.ALL
+        },
+    )
+
+    private fun updateOriginalWeeksNotice() {
+        val selection = currentWeekSelection()
+        val preservingIrregularWeeks = originalWeeks.isNotEmpty() &&
+            selection == originalWeekSelection && originalWeeks != selection.generatedWeeks()
+        originalWeeksNotice.visibility = if (preservingIrregularWeeks) View.VISIBLE else View.GONE
+        if (preservingIrregularWeeks) {
+            originalWeeksNotice.text = getString(
+                R.string.course_original_weeks_notice, originalWeeks.sorted().joinToString("、"),
+            )
+        }
+    }
+
+    private fun updateEditorEnabled() {
+        val enabled = !isLoading && !isSaving
+        toolbar.menu.findItem(R.id.action_save).isEnabled = enabled
+        toolbar.menu.findItem(R.id.action_delete).isEnabled = enabled
+        listOf(etName, etTeacher, etRoom, npStart, npEnd, npFromWeek, npToWeek)
+            .forEach { it.isEnabled = enabled }
+        dayButtons.forEach { it.isEnabled = enabled }
+        colorViews.forEach { it.isEnabled = enabled }
+        for (index in 0 until weekModeGroup.childCount) {
+            weekModeGroup.getChildAt(index).isEnabled = enabled
+        }
     }
 
     private fun toast(res: Int) {

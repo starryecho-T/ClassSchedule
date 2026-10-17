@@ -23,7 +23,10 @@ object JluScheduleParser {
 
     /** 保存页面快照，便于离线分析页面结构、补充解析规则。 */
     fun dump(context: Context, html: String): File {
-        val dir = File(context.filesDir, "import").apply { mkdirs() }
-        return File(dir, "schedule_snapshot.html").apply { writeText(html) }
+        val dir = File(context.cacheDir, "import").apply {
+            check(isDirectory || mkdirs()) { "Cannot create snapshot directory" }
+        }
+        // 独立文件避免选择导出位置期间重新抓取导致内容被替换。
+        return File.createTempFile("schedule_snapshot_", ".html", dir).apply { writeText(html) }
     }
 }
