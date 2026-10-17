@@ -62,4 +62,12 @@
     <string name="import_snapshot_saved">页面快照已保存</string>
     <string name="import_confirm">导入将清空现有课程并替换为解析出的 %1$d 条安排，确定继续吗？</string>
     <string name="import_done">导入完成</string>
+
+    <!-- M5 桌面小组件与上课提醒 -->
+    <string name="widget_today_description">今日课程一览：按时间排序显示今天的课</string>
+    <string name="reminder_channel_name">上课提醒</string>
+    <string name="reminder_channel_description">上课前 20 分钟提醒</string>
+    <string name="reminder_title_prefix">即将上课</string>
+    <string name="reminder_granted">已开启上课提醒</string>
+    <string name="reminder_denied">未授予通知权限，无法提醒</string>
 </resources>

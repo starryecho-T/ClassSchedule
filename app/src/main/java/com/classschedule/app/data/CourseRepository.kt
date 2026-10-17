@@ -8,6 +8,7 @@ import com.classschedule.app.model.Course
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -27,6 +28,9 @@ class CourseRepository(
     /** 观察全部课程，任何增删改自动触发新数据。 */
     fun observeAll(): Flow<List<Course>> =
         dao.observeAll().map { list -> list.map { it.toDomain() } }
+
+    /** 一次性读取全部课程（小组件刷新等不需要持续观察的场景）。 */
+    suspend fun observeAllOnce(): List<Course> = observeAll().first()
 
     suspend fun getById(id: Long): Course? = dao.getById(id)?.toDomain()
 
