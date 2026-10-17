@@ -70,17 +70,18 @@ object GridScheduleParser {
             cursor++
         }
         // 实验课等按具体日期排课：卡片名是「X月X日」且时间无周次时，
-        // 用格子位置（星期 + 当前学期校历）反推周次，日期并入课程名保留信息。
+        // 用日期反推周次与星期（须与格子位置一致），日期并入课程名保留信息。
         val dateName = dateOnlyName.find(card.name)?.groupValues
         if (weeks.isEmpty()) {
-            if (dateName == null || card.week == 0) {
+            if (dateName == null) {
                 throw InvalidCard("$location：缺少上课周次（“${card.time.take(40)}”）。")
             }
             val derived = deriveWeekFromDate(dateName)
-            if (derived == null || derived != card.week) {
-                throw InvalidCard("$location：日期「${dateName[1]}月${dateName[2]}日」与卡片位置（星期${card.week}）不符。")
+                ?: throw InvalidCard("$location：日期「${dateName[1]}月${dateName[2]}日」不在本学期内。")
+            if (card.week != 0 && derived.dayOfWeek != card.week) {
+                throw InvalidCard("$location：日期「${dateName[1]}月${dateName[2]}日」是星期${derived.dayOfWeek}，与卡片位置（星期${card.week}）不符。")
             }
-            weeks += derived.toString()
+            weeks += derived.week.toString()
         }
         val dayText = if (cursor < parts.size && daySegment.matches(parts[cursor])) parts[cursor++] else ""
         // 日期排课的时间文本可能不含星期：星期由格子位置或日期给出。
@@ -115,18 +116,23 @@ object GridScheduleParser {
     /** 「10月13日」这类纯日期课程名（实验课按具体日期排课）。 */
     private val dateOnlyName = Regex("""^\s*(?:实验|课程)?\s*(\d{1,2})月(\d{1,2})日\s*$""")
 
-    /** 用学期开学日把日期换算成周次；不在学期内或参数异常返回 null。 */
-    private fun deriveWeekFromDate(groups: MatchGroupCollection): Int? {
-        val month = groups[1]?.value?.toIntOrNull() ?: return null
-        val day = groups[2]?.value?.toIntOrNull() ?: return null
+    /** 用学期开学日把日期换算成周次与星期；不在学期内或参数异常返回 null。 */
+    private fun deriveWeekFromDate(groups: List<String>): DerivedDate? {
+        val month = groups.getOrNull(1)?.toIntOrNull() ?: return null
+        val day = groups.getOrNull(2)?.toIntOrNull() ?: return null
         val start = com.classschedule.app.data.TermCalendar.TERM_START
         val date = runCatching { java.time.LocalDate.of(start.year, month, day) }.getOrNull()
             // 跨年学期：秋季月份小于春季时按下一年解释。
             ?: runCatching { java.time.LocalDate.of(start.year + 1, month, day) }.getOrNull()
             ?: return null
         val week = com.classschedule.app.data.TermCalendar.currentWeek(date)
-        return week.takeIf { it in 1..com.classschedule.app.data.TermCalendar.TOTAL_WEEKS }
+        return if (week in 1..com.classschedule.app.data.TermCalendar.TOTAL_WEEKS) {
+            DerivedDate(week, date.dayOfWeek.value)
+        } else null
     }
+
+    /** 日期推导结果：学期周次 + 星期几（1=周一）。 */
+    private data class DerivedDate(val week: Int, val dayOfWeek: Int)
 
     /**
      * 卡片自带的结构位置与文本必须互相印证；属性缺失（0）时跳过对应校验。
