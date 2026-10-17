@@ -22,6 +22,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.classschedule.app.data.TermCalendar
 import com.classschedule.app.model.Course
 import com.classschedule.app.reminder.ReminderReceiver
+import com.classschedule.app.update.UpdateCheckLauncher
 import com.classschedule.app.ui.CourseDetailSheet
 import com.classschedule.app.ui.EditCourseActivity
 import com.classschedule.app.ui.ImportActivity
@@ -111,6 +112,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
         updateWeekUi()
+
+        // 启动时静默检查新版本：延后到首帧之后执行，不占用启动路径。
+        window.decorView.post { checkForUpdate(userInitiated = false) }
+    }
+
+    /** 查询 GitHub 最新 Release；有新版本则提示使用者。 */
+    private fun checkForUpdate(userInitiated: Boolean) {
+        val versionName = runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrNull() ?: return
+        UpdateCheckLauncher.check(this, versionName, userInitiated)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -136,6 +148,10 @@ class MainActivity : AppCompatActivity() {
             }
             R.id.action_hidden_courses -> {
                 showHiddenCourses()
+                true
+            }
+            R.id.action_check_update -> {
+                checkForUpdate(userInitiated = true)
                 true
             }
             else -> super.onOptionsItemSelected(item)

@@ -17,4 +17,9 @@
         android:id="@+id/action_hidden_courses"
         android:title="@string/hidden_courses_title"
         app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_check_update"
+        android:title="@string/update_check"
+        app:showAsAction="never" />
 </menu>
