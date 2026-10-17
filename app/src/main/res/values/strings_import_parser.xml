@@ -1,0 +1,22 @@
+<resources>
+    <string name="import_recognize">一键识别课表</string>
+    <string name="import_review">核对并导入</string>
+    <string name="import_instructions">实验版：登录后进入“我的教学 → 我的课表”，选择当前学期并切换到列表模式，再点击“一键识别课表”。分页列表请逐页识别、追加导入。</string>
+    <string name="import_recognized">识别到 %1$d 条课程安排，请核对学期、周次、节次和教室后确认导入。</string>
+    <string name="import_diagnostics">暂时无法完整识别，未修改原课表。\n%1$s\n请切换课表列表后重试，或导出页面快照用于适配。</string>
+    <string name="import_no_table">未发现有明确课程名、星期、节次和周次的课表列表</string>
+    <string name="import_snapshot_unavailable">本次快照保存失败，可重新识别后重试</string>
+    <string name="import_replace_choice">替换现有全部课程（默认保留已有课程）</string>
+    <string name="import_review_notice">默认追加课程并跳过完全重复的安排。仅导入当前页面已加载的数据；分页请逐页追加。请确认课程属于当前学期。当前支持第 1—17 周、第 1—12 节。</string>
+    <string name="import_verify_choice">我已核对当前学期和课程信息</string>
+    <string name="import_replace_warning">替换会删除原有全部课程和隐藏设置，仅适用于已确认完整的学期课表。共导入 %1$d 条安排，确定替换吗？</string>
+    <string name="import_confirm_replace">确认替换</string>
+    <string name="import_confirm_add">确认导入</string>
+    <string name="import_verifying">正在核对页面是否发生变化…</string>
+    <string name="import_changed">页面或课表数据已变化，请重新识别后导入</string>
+    <string name="import_added">已新增 %1$d 条课程安排，重复安排已跳过</string>
+    <string name="import_replaced">已替换为 %1$d 条课程安排</string>
+    <string name="import_nothing_added">这些课程已经存在，无需重复导入</string>
+    <string name="import_pending">正在核对或保存，请稍候…</string>
+    <string name="import_timeout">页面识别超时，请等页面加载完成后重试</string>
+</resources>

@@ -74,6 +74,88 @@ class CourseDaoPolicyTest {
         assertEquals(1, dao.insertCalls)
     }
 
+    @Test
+    fun appendImportKeepsExistingCourseAndHiddenState() = runBlocking {
+        val existing = course(1, "用户课程").copy(hiddenWeeksCsv = "1,3", colorIndex = 4)
+        val dao = InMemoryDao(listOf(existing))
+        val duplicate = existing.copy(id = 99, hiddenWeeksCsv = "", colorIndex = 0)
+        val incoming = course(75, "导入课程").copy(hiddenWeeksCsv = "1")
+
+        assertEquals(1, dao.importCourses(listOf(duplicate, incoming), false))
+
+        assertEquals(existing, dao.rows.first())
+        assertEquals(0L, dao.rows.last().id)
+        assertEquals("", dao.rows.last().hiddenWeeksCsv)
+        assertEquals(0, dao.deleteCalls)
+        assertEquals(1, dao.insertCalls)
+    }
+
+    @Test
+    fun repeatedImportReportsZeroAndDoesNotWriteAgain() = runBlocking {
+        val incoming = listOf(course(0, "导入课程"))
+        val dao = InMemoryDao()
+
+        assertEquals(1, dao.importCourses(incoming, false))
+        assertEquals(0, dao.importCourses(incoming, false))
+
+        assertEquals(1, dao.rows.size)
+        assertEquals(1, dao.insertCalls)
+        assertEquals(0, dao.deleteCalls)
+    }
+
+    @Test
+    fun replaceImportDeduplicatesAndClearsIncomingIdentity() = runBlocking {
+        val incoming = course(91, "导入课程").copy(hiddenWeeksCsv = "1,2")
+        val dao = InMemoryDao(listOf(course(1, "原课程")))
+
+        assertEquals(1, dao.importCourses(listOf(incoming, incoming.copy(colorIndex = 2)), true))
+
+        assertEquals(1, dao.rows.size)
+        assertEquals("导入课程", dao.rows.single().name)
+        assertEquals(0L, dao.rows.single().id)
+        assertEquals("", dao.rows.single().hiddenWeeksCsv)
+        assertEquals(1, dao.deleteCalls)
+        assertEquals(1, dao.insertCalls)
+    }
+
+    @Test
+    fun invalidImportBatchNeverDeletesOrInsertsInEitherMode() = runBlocking {
+        for (replaceExisting in listOf(false, true)) {
+            val existing = course(1, "原课程")
+            val dao = InMemoryDao(listOf(existing))
+            val incoming = listOf(course(0, "有效课程"),
+                course(0, "无效课程").copy(weeksCsv = "18"))
+
+            try {
+                dao.importCourses(incoming, replaceExisting)
+                fail("无效导入应该在写入前被拒绝")
+            } catch (_: IllegalArgumentException) {
+                // Expected: validate the complete batch before writes.
+            }
+
+            assertEquals(listOf(existing), dao.rows)
+            assertEquals(0, dao.deleteCalls)
+            assertEquals(0, dao.insertCalls)
+        }
+    }
+
+    @Test
+    fun emptyImportNeverDeletesOrInsertsInEitherMode() = runBlocking {
+        for (replaceExisting in listOf(false, true)) {
+            val existing = course(1, "原课程")
+            val dao = InMemoryDao(listOf(existing))
+            try {
+                dao.importCourses(emptyList(), replaceExisting)
+                fail("空导入应该被拒绝")
+            } catch (_: IllegalArgumentException) {
+                // Expected: an empty preview cannot clear the timetable.
+            }
+            assertEquals(listOf(existing), dao.rows)
+            assertEquals(0, dao.deleteCalls)
+            assertEquals(0, dao.insertCalls)
+        }
+    }
+
     private fun course(id: Long, name: String) = CourseEntity(
         id = id,
         name = name,

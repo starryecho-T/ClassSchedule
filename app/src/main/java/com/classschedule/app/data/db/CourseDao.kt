@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
+import com.classschedule.app.data.ImportPolicy
 import kotlinx.coroutines.flow.Flow
 
 /** 课程表数据访问对象。 */
@@ -49,6 +50,20 @@ interface CourseDao {
         require(courses.isNotEmpty()) { "导入课表为空，未修改现有课程" }
         deleteAll()
         insertAll(courses)
+    }
+
+    /** 查询、去重和写入共用事务，避免并发导入插入重复安排。 */
+    @Transaction
+    suspend fun importCourses(
+        courses: List<CourseEntity>,
+        replaceExisting: Boolean,
+    ): Int {
+        val prepared = ImportPolicy.prepare(courses)
+        val incoming = if (replaceExisting) prepared
+            else ImportPolicy.additions(getAllOnce(), prepared)
+        if (replaceExisting) deleteAll()
+        if (incoming.isNotEmpty()) insertAll(incoming)
+        return incoming.size
     }
 
     @Delete

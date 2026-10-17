@@ -1,24 +1,58 @@
 package com.classschedule.app.data.importer
 
 import android.content.Context
-import com.classschedule.app.model.Course
+import org.json.JSONObject
 import java.io.File
 
 /**
- * 教务课表页面解析器（M4）。
+ * 将页面采集结果交给严格的列表解析器。真实学校页面仍需样本校准。
  *
- * 抓取方式：ImportActivity 用 WebView 渲染 ieda.jlu.edu.cn「我的课表」，
+ * 抓取方式：ImportActivity 用 WebView 渲染 iedu.jlu.edu.cn「我的课表」，
  * 登录态、验证码全部由用户在真实页面内完成，App 只提取渲染后的 DOM。
  *
- * v1 策略：页面结构未知，[parse] 暂返回空表，同时把原始 HTML 落盘快照；
- * 拿到真实快照后在此实现选择器解析（dayOfWeek/startPeriod/weeks -> Course）。
+ * 仅解释有明确课程名、星期、节次和周次的列表；未知页面绝不猜测时间。
  */
 object JluScheduleParser {
 
-    /** 从「我的课表」页面 HTML 解析课程安排列表；无法识别时返回空表。 */
-    fun parse(html: String): List<Course> {
-        // TODO(M4-v2): 根据真实页面快照实现解析（表格 / 内嵌 JSON 均可能，先 dump 定结构）
-        return emptyList()
+    data class Capture(
+        val sourceUrl: String,
+        val tables: List<ScheduleTable>,
+        val warnings: List<String>,
+        val html: String,
+    )
+
+    /** WebView JSON 作为不可信页面输入处理：尺寸和单元格类型必须先通过校验。 */
+    fun decodeCapture(payload: String): Capture {
+        require(payload.length <= 4 * 1024 * 1024) { "页面过大，请切换到课表列表后重试" }
+        val json = JSONObject(payload)
+        val rawTables = json.getJSONArray("tables")
+        require(rawTables.length() <= 40) { "页面表格过多" }
+        var rowCount = 0
+        val tables = (0 until rawTables.length()).map { tableIndex ->
+            val rows = rawTables.getJSONObject(tableIndex).getJSONArray("rows")
+            rowCount += rows.length()
+            require(rowCount <= 1000) { "页面行数过多，请先筛选当前学期" }
+            ScheduleTable((0 until rows.length()).map { rowIndex ->
+                val cells = rows.getJSONArray(rowIndex)
+                require(cells.length() <= 40) { "表格列数超出范围" }
+                (0 until cells.length()).map { column ->
+                    val value = cells.get(column)
+                    require(value is String && value.length <= 4000) { "表格字段格式不正确或过长" }
+                    value
+                }
+            })
+        }
+        val rawWarnings = json.getJSONArray("warnings")
+        require(rawWarnings.length() <= 100) { "页面诊断数量异常" }
+        val warnings = (0 until rawWarnings.length()).map { rawWarnings.getString(it).take(300) }
+        val html = json.getString("html")
+        require(html.length <= 2 * 1024 * 1024) { "页面快照过大" }
+        return Capture(json.optString("url").take(2048), tables, warnings, html)
+    }
+
+    fun parse(capture: Capture): ScheduleParseResult {
+        val result = ScheduleTableParser.parse(capture.tables)
+        return result.copy(issues = (capture.warnings + result.issues).distinct())
     }
 
     /** 保存页面快照，便于离线分析页面结构、补充解析规则。 */

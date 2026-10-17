@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
+import android.widget.CheckBox
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -28,10 +31,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.json.JSONTokener
 import java.io.File
 import java.io.IOException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /** 用户在真实教务页面登录，抓取 DOM；未适配的页面可由用户主动导出快照。 */
 class ImportActivity : AppCompatActivity() {
@@ -48,6 +55,12 @@ class ImportActivity : AppCompatActivity() {
     private var captureJob: Job? = null
     private var applying = false
     private var exporting = false
+    private var verifying = false
+    private var capturedUrl: String? = null
+    private var previewDialog: AlertDialog? = null
+    private val captureScript by lazy {
+        assets.open("import/capture_schedule.js").bufferedReader().use { it.readText() }
+    }
 
     private val repo by lazy {
         CourseRepository(applicationContext, AppDatabase.getDatabase(applicationContext).courseDao())
@@ -71,7 +84,7 @@ class ImportActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_import)
         findViewById<MaterialToolbar>(R.id.import_toolbar)
-            .setNavigationOnClickListener { if (!applying) finish() }
+            .setNavigationOnClickListener { if (!applying && !verifying) finish() }
         statusText = findViewById(R.id.import_status)
         parseButton = findViewById(R.id.btn_import_parse)
         importButton = findViewById(R.id.btn_import_apply)
@@ -98,7 +111,7 @@ class ImportActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
-                parseButton.isEnabled = !applying
+                parseButton.isEnabled = !applying && !verifying && captureJob?.isActive != true
             }
 
             override fun onReceivedError(
@@ -106,7 +119,7 @@ class ImportActivity : AppCompatActivity() {
             ) {
                 if (request?.isForMainFrame == true) {
                     invalidateCapture()
-                    parseButton.isEnabled = !applying
+                    parseButton.isEnabled = !applying && !verifying
                     statusText.setText(R.string.import_page_failed)
                 }
             }
@@ -115,7 +128,7 @@ class ImportActivity : AppCompatActivity() {
             webView.loadUrl(JLU_PORTAL_URL)
         }
         onBackPressedDispatcher.addCallback(this) {
-            if (!applying) {
+            if (!applying && !verifying) {
                 if (webView.canGoBack()) webView.goBack() else finish()
             }
         }
@@ -130,6 +143,9 @@ class ImportActivity : AppCompatActivity() {
         captureJob?.cancel()
         captureJob = null
         parsedCourses = emptyList()
+        capturedUrl = null
+        previewDialog?.dismiss()
+        previewDialog = null
         snapshot = null
         importButton.isEnabled = false
         snapshotButton.isEnabled = false
@@ -137,85 +153,178 @@ class ImportActivity : AppCompatActivity() {
     }
 
     private fun captureCurrentPage() {
-        if (applying) return
+        if (applying || verifying) return
         invalidateCapture()
         val generation = captureGeneration
         statusText.setText(R.string.import_capturing)
-        webView.evaluateJavascript(JS_CAPTURE) { value ->
-            if (isFinishing || isDestroyed || generation != captureGeneration) return@evaluateJavascript
-            val html = runCatching { JSONTokener(value).nextValue() as? String }.getOrNull()
-            if (html.isNullOrBlank()) {
-                statusText.setText(R.string.import_parse_empty_page)
-                parseButton.isEnabled = true
-                return@evaluateJavascript
-            }
-            captureJob = lifecycleScope.launch {
-                try {
-                    val courses = withContext(Dispatchers.Default) { JluScheduleParser.parse(html) }
-                    if (generation != captureGeneration) return@launch
-                    if (courses.isEmpty()) {
+        captureJob = lifecycleScope.launch {
+            try {
+                val capture = readCapture()
+                val result = withContext(Dispatchers.Default) { JluScheduleParser.parse(capture) }
+                if (generation != captureGeneration) return@launch
+                if (!result.canImport) {
+                    val reasons = result.issues.ifEmpty { listOf(getString(R.string.import_no_table)) }
+                    statusText.text = getString(R.string.import_diagnostics, reasons.take(3).joinToString("\n") { it.take(120) })
+                    try {
                         val file = withContext(Dispatchers.IO) {
-                            JluScheduleParser.dump(applicationContext, html)
+                            JluScheduleParser.dump(applicationContext, capture.html)
                         }
-                        if (generation != captureGeneration) return@launch
-                        snapshot = file
-                        snapshotButton.isEnabled = !exporting
-                        statusText.setText(R.string.import_unsupported_with_export)
-                    } else {
-                        parsedCourses = courses
-                        statusText.text = getString(R.string.import_parse_ok, courses.size)
-                        importButton.isEnabled = true
+                        if (generation == captureGeneration) {
+                            snapshot = file
+                            snapshotButton.isEnabled = !exporting
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: IOException) {
+                        statusText.append("\n" + getString(R.string.import_snapshot_unavailable))
                     }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    if (generation == captureGeneration) statusText.setText(R.string.import_capture_failed)
-                } finally {
-                    if (generation == captureGeneration) parseButton.isEnabled = !applying
+                } else {
+                    parsedCourses = result.courses
+                    capturedUrl = capture.sourceUrl
+                    statusText.text = getString(R.string.import_recognized, parsedCourses.size)
+                    importButton.isEnabled = true
+                    confirmImport()
+                }
+            } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                if (generation == captureGeneration) statusText.setText(R.string.import_timeout)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (generation == captureGeneration) statusText.setText(R.string.import_capture_failed)
+            } finally {
+                if (generation == captureGeneration) parseButton.isEnabled = !applying && !verifying
+            }
+        }
+    }
+
+    private suspend fun readCapture(): JluScheduleParser.Capture {
+        val payload = withTimeout(15_000) {
+            suspendCancellableCoroutine<String> { continuation ->
+                webView.evaluateJavascript(captureScript) { value ->
+                    if (!continuation.isActive) return@evaluateJavascript
+                    try {
+                        require(value.length <= 16 * 1024 * 1024) { "Page too large" }
+                        val decoded = JSONTokener(value).nextValue() as? String
+                        require(!decoded.isNullOrBlank()) { "Empty capture" }
+                        continuation.resume(decoded)
+                    } catch (error: Exception) {
+                        continuation.resumeWithException(error)
+                    }
                 }
             }
         }
+        return withContext(Dispatchers.Default) { JluScheduleParser.decodeCapture(payload) }
     }
 
     private fun confirmImport() {
-        if (parsedCourses.isEmpty() || applying) return
+        if (parsedCourses.isEmpty() || applying || verifying) return
         val courses = parsedCourses.toList()
         val generation = captureGeneration
-        val preview = courses.take(20).joinToString("\n\n") { course ->
+        val sourceUrl = capturedUrl ?: return
+        val preview = courses.joinToString("\n\n") { course ->
             val day = "一二三四五六日".getOrNull(course.dayOfWeek - 1) ?: '?'
             course.name + " · 周" + day + " " + course.startPeriod + "-" + course.endPeriod + "节\n" +
-                Course.weeksText(course.weeks) + " · " + course.room
+                Course.weeksText(course.weeks) + " · " + course.room + " · " + course.teacher
         }
-        val remaining = if (courses.size > 20) getString(R.string.import_preview_more, courses.size - 20) else ""
-        AlertDialog.Builder(this)
+        val padding = (16 * resources.displayMetrics.density).toInt()
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, padding, padding, padding)
+        }
+        content.addView(TextView(this).apply {
+            text = getString(R.string.import_review_notice) + "\n\n" + preview
+            setTextIsSelectable(true)
+        })
+        val replace = CheckBox(this).apply { setText(R.string.import_replace_choice) }
+        val verified = CheckBox(this).apply { setText(R.string.import_verify_choice) }
+        content.addView(replace)
+        content.addView(verified)
+        val scroll = ScrollView(this).apply { addView(content) }
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.import_preview_title)
-            .setMessage(preview + remaining + "\n\n" + getString(R.string.import_confirm, courses.size))
-            .setPositiveButton(R.string.import_action_apply) { _, _ ->
-                if (generation == captureGeneration && !applying) applyCourses(courses)
-            }
+            .setView(scroll)
+            .setPositiveButton(R.string.import_confirm_add, null)
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+        previewDialog = dialog
+        dialog.setOnShowListener {
+            val button = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            button.isEnabled = verified.isChecked
+            verified.setOnCheckedChangeListener { _, checked -> button.isEnabled = checked }
+            button.setOnClickListener {
+                if (generation != captureGeneration || applying || verifying) return@setOnClickListener
+                dialog.dismiss()
+                if (replace.isChecked) {
+                    val replacement = AlertDialog.Builder(this)
+                        .setMessage(getString(R.string.import_replace_warning, courses.size))
+                        .setPositiveButton(R.string.import_confirm_replace) { _, _ ->
+                            verifyAndImport(courses, sourceUrl, generation, true)
+                        }
+                        .setNegativeButton(android.R.string.cancel, null).create()
+                    previewDialog = replacement
+                    replacement.show()
+                } else {
+                    verifyAndImport(courses, sourceUrl, generation, false)
+                }
+            }
+        }
+        dialog.show()
     }
 
-    private fun applyCourses(courses: List<Course>) {
+    private fun verifyAndImport(courses: List<Course>, sourceUrl: String, generation: Int, replace: Boolean) {
+        if (generation != captureGeneration || applying || verifying) return
+        verifying = true
+        parseButton.isEnabled = false
+        importButton.isEnabled = false
+        statusText.setText(R.string.import_verifying)
+        lifecycleScope.launch {
+            try {
+                val current = readCapture()
+                val result = withContext(Dispatchers.Default) { JluScheduleParser.parse(current) }
+                if (generation != captureGeneration || sourceUrl != current.sourceUrl ||
+                    !result.canImport || result.courses != courses) {
+                    invalidateCapture()
+                    statusText.setText(R.string.import_changed)
+                    return@launch
+                }
+                applyCourses(courses, replace)
+            } catch (cancelled: CancellationException) {
+                if (cancelled is kotlinx.coroutines.TimeoutCancellationException) {
+                    statusText.setText(R.string.import_timeout)
+                } else throw cancelled
+            } catch (_: Exception) {
+                statusText.setText(R.string.import_capture_failed)
+            } finally {
+                verifying = false
+                parseButton.isEnabled = !applying
+                importButton.isEnabled = !applying && parsedCourses.isNotEmpty()
+            }
+        }
+    }
+
+    private suspend fun applyCourses(courses: List<Course>, replace: Boolean) {
         applying = true
         importButton.isEnabled = false
         parseButton.isEnabled = false
         statusText.setText(R.string.import_applying)
-        lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) { repo.replaceAll(courses) }
-                Toast.makeText(this@ImportActivity, R.string.import_done, Toast.LENGTH_SHORT).show()
-                finish()
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                statusText.setText(R.string.import_apply_failed)
-            } finally {
-                applying = false
-                parseButton.isEnabled = true
-                importButton.isEnabled = parsedCourses.isNotEmpty()
+        try {
+            val count = repo.importCourses(courses, replace)
+            val message = when {
+                replace -> getString(R.string.import_replaced, count)
+                count == 0 -> getString(R.string.import_nothing_added)
+                else -> getString(R.string.import_added, count)
             }
+            Toast.makeText(this@ImportActivity, message, Toast.LENGTH_LONG).show()
+            // 保留页面，分页课表可继续下一页追加；Flow 会同步刷新主课表。
+            statusText.text = message
+            parsedCourses = emptyList()
+            capturedUrl = null
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            statusText.setText(R.string.import_apply_failed)
+        } finally {
+            applying = false
         }
     }
 
@@ -260,6 +369,7 @@ class ImportActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        previewDialog?.dismiss()
         captureGeneration++
         captureJob?.cancel()
         (webView.parent as? ViewGroup)?.removeView(webView)
@@ -269,12 +379,10 @@ class ImportActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val JLU_PORTAL_URL = "https://ieda.jlu.edu.cn"
+        private const val JLU_PORTAL_URL = "https://iedu.jlu.edu.cn"
         private const val STATE_EXPORT_SOURCE = "export_snapshot_path"
         private const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        private const val JS_CAPTURE =
-            "(function(){return document.documentElement ? document.documentElement.outerHTML : '';})()"
     }
 }

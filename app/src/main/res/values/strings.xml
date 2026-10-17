@@ -53,7 +53,7 @@
 
     <!-- M4 教务导入 -->
     <string name="import_title">从教务导入</string>
-    <string name="import_hint">① 在下方登录教务系统（ieda.jlu.edu.cn）② 进入「我的课表」页面 ③ 点击「抓取解析」</string>
+    <string name="import_hint">① 在下方登录教务系统（iedu.jlu.edu.cn）② 进入「我的课表」页面 ③ 点击「一键识别课表」</string>
     <string name="import_action_parse">抓取解析</string>
     <string name="import_action_apply">导入课表</string>
     <string name="import_parse_empty_page">页面尚未加载完成，请稍候重试</string>

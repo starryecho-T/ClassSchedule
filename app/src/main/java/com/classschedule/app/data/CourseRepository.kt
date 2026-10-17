@@ -68,6 +68,19 @@ class CourseRepository(
         dao.replaceAll(courses.map { it.toEntity() })
     }
 
+    /**
+     * 教务导入默认追加并跳过重复安排；全量替换必须由 UI 明确确认。
+     * 先校验整批再记录初始化状态，返回实际新增数（替换时为导入数）。
+     */
+    suspend fun importCourses(
+        courses: List<Course>,
+        replaceExisting: Boolean = false,
+    ): Int = mutationMutex.withLock {
+        val prepared = ImportPolicy.prepare(courses.map { it.toEntity() })
+        markInitialized()
+        dao.importCourses(prepared, replaceExisting)
+    }
+
     private suspend fun markInitialized() {
         if (seedPrefs.getBoolean(SeedPolicy.INITIALIZED_KEY, false)) return
         withContext(Dispatchers.IO) {
