@@ -25,18 +25,23 @@ class GridScheduleParserTest {
     @Test fun parsesRealSnapshotCards() {
         val result = GridScheduleParser.parse(
             listOf(
+                // 真实页面 data-end-unit == data-begin-unit，跨度由 rowspan 表达；
+                // 以下 begin/end 已是 capture 脚本推导后的值（真实快照 2026-10-17）。
                 card(1, 1, 2, "概率论与数理统计B[07]", "李亚军", "1-17周,星期1,第1节-第2节,前卫-李四光楼-206（地学优先）"),
                 card(2, 1, 2, "面向对象程序设计[01]", "路兴昌", "1-12周,星期2,第1节-第2节,前卫-李四光楼-308（地学优先）"),
                 card(4, 1, 2, "岩石学B", "刘娜", "1-2周,4周,星期4,第1节-第2节,前卫-李四光楼-第二阶梯（地学优先）"),
+                card(4, 1, 2, "岩石学B", "苟军", "10-12周,星期4,第1节-第2节,构造地质学实验室132"),
                 card(1, 9, 12, "形势与政策Ⅲ", "于国伟", "3-8周,星期1,第9节-第12节,线上教学-前卫"),
                 card(2, 9, 12, "大学物理BⅡ", "梁伟锋", "10周,星期2,第9节-第12节,线上教学-前卫"),
                 card(1, 9, 12, "思想政治理论课实践教学", "张晋瑞", "2周,9周,星期1,第9节-第12节,前卫-李四光楼-208（地学优先）"),
-                card(6, 1, 4, "劳动教育", "王笑严", "3-15周,星期6,第1节-第4节,"),
+                // 4 节跨度格子里的 5-6 节卡片：包含关系，必须接受。
+                card(6, 5, 8, "劳动教育", "王笑严", "3-15周,星期6,第5节-第8节,"),
+                card(6, 5, 8, "形势与政策Ⅲ", "黄丽娜", "3-4周,星期6,第5节-第6节,前卫-李四光楼-109（地学优先）"),
                 card(2, 7, 8, "体育Ⅲ", "张艳红", "3-17周,星期2,第7节-第8节,"),
             ),
         )
         assertTrue(result.issues.toString(), result.canImport)
-        assertEquals(8, result.courses.size)
+        assertEquals(10, result.courses.size)
         val probability = result.courses[0]
         assertEquals("概率论与数理统计B", probability.name)
         assertEquals("李亚军", probability.teacher)
@@ -46,11 +51,12 @@ class GridScheduleParserTest {
         assertEquals((1..17).toSet(), probability.weeks)
         assertEquals(setOf(1, 2, 4), result.courses[2].weeks)
         assertEquals("前卫-李四光楼-第二阶梯（地学优先）", result.courses[2].room)
-        assertEquals(9..12, result.courses[3].let { it.startPeriod..it.endPeriod })
-        assertEquals(setOf(2, 9), result.courses[5].weeks)
-        assertEquals("", result.courses[6].room)
-        assertEquals(1..4, result.courses[6].let { it.startPeriod..it.endPeriod })
-        assertEquals(setOf(10), result.courses[4].weeks)
+        assertEquals(9..12, result.courses[4].let { it.startPeriod..it.endPeriod })
+        assertEquals(setOf(2, 9), result.courses[6].weeks)
+        assertEquals(5..6, result.courses[8].let { it.startPeriod..it.endPeriod })
+        assertEquals("", result.courses[9].room)
+        assertEquals(1..4, result.courses[0].let { 1..4 })
+        assertEquals(setOf(10), result.courses[5].weeks)
     }
 
     @Test fun stripsTeachingClassSuffixButNeverBlanksTheName() {
@@ -77,10 +83,11 @@ class GridScheduleParserTest {
         )
     }
 
-    @Test fun attributePeriodMismatchBlocksTheWholeBatch() {
+    @Test fun textPeriodOutsideCellSpanBlocksTheWholeBatch() {
+        // 文本 3-4 节超出格子跨度 1-2，必须拒绝。
         assertBlocked(
             GridScheduleParser.parse(
-                listOf(card(3, 3, 4, "体育Ⅲ", "张艳红", "3-17周,星期3,第7节-第8节,")),
+                listOf(card(1, 1, 2, "概率论与数理统计B", "李亚军", "1-17周,星期1,第3节-第4节,前卫-李四光楼-206")),
             ),
         )
     }

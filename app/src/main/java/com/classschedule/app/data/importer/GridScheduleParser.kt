@@ -90,7 +90,13 @@ object GridScheduleParser {
         )
     }
 
-    /** 卡片自带的结构位置与文本必须互相印证；属性缺失（0）时跳过对应校验。 */
+    /**
+     * 卡片自带的结构位置与文本必须互相印证；属性缺失（0）时跳过对应校验。
+     *
+     * 节次校验为“包含”关系：格子的跨度（beginUnit..endUnit，真实页面由 rowspan 推导）
+     * 是卡片可占据的最大范围，同一格子里不同卡片可以只占其中一部分（例如 4 节格子
+     * 里既有 5-8 节的课也有 5-6 节的课）。文本节次必须完整落在跨度内，否则拒绝。
+     */
     private fun verifyAttributes(card: GridCard, dayText: String, periodText: String, location: String) {
         if (card.week != 0) {
             val dayValue = digits.findAll(dayText).map { it.value.toInt() }.singleOrNull()
@@ -101,10 +107,10 @@ object GridScheduleParser {
         }
         if (card.beginUnit != 0 || card.endUnit != 0) {
             val units = periodText.let(digits::findAll).map { it.value.toInt() }.toList()
-            val begin = card.beginUnit
-            val end = if (card.endUnit != 0) card.endUnit else card.beginUnit
-            if (units.size !in 1..2 || units.first() != begin || units.last() != end) {
-                throw InvalidCard("$location：卡片位置（第${begin}节-第${end}节）与文本“$periodText”不一致。")
+            val cellBegin = card.beginUnit
+            val cellEnd = if (card.endUnit != 0) card.endUnit else card.beginUnit
+            if (units.size !in 1..2 || units.first() < cellBegin || units.last() > cellEnd) {
+                throw InvalidCard("$location：文本节次“$periodText”超出卡片位置（第${cellBegin}节-第${cellEnd}节）。")
             }
         }
     }
