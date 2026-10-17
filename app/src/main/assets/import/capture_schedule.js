@@ -3,6 +3,7 @@
 
     // Keep this asset self-contained: it runs in the signed-in WebView page.
     var MAX_TABLES = 40;
+    var MAX_CARDS = 300;
     var MAX_ROWS = 1000;
     var MAX_COLUMNS = 40;
     var MAX_DOCUMENTS = 20;
@@ -19,6 +20,7 @@
     var outputTextChars = 0;
     var candidatesRead = 0;
     var rowsRead = 0;
+    var cards = [];
 
     function warn(message) {
         if (warnings.indexOf(message) < 0) warnings.push(message);
@@ -258,6 +260,51 @@
         }
     }
 
+    function directText(element) {
+        if (!element) return '';
+        var pieces = [];
+        for (var child = element.firstChild; child; child = child.nextSibling) {
+            if (child.nodeType === 3) pieces.push(child.nodeValue || '');
+        }
+        return normalize(pieces.join(''));
+    }
+
+    // JLU 网格课表：td[data-role="item"] 的属性给出结构位置，卡片内文本给出时间与地点。
+    // 只做结构提取，时间语义由应用端解析器校验。
+    function readCards(doc) {
+        var cells = doc.querySelectorAll('td[data-role="item"]');
+        for (var i = 0; i < cells.length; i++) {
+            var cell = cells[i];
+            if (!visible(cell)) continue;
+            var card = cell.querySelector('.mtt_arrange_item') || cell;
+            var name = directText(card.querySelector('.mtt_item_kcmc'));
+            var time = directText(card.querySelector('.mtt_item_room'));
+            if (!name && !time) continue; // 空占位格
+            if (!name || !time) {
+                warn('课程卡片缺少课程名或上课时间，抓取内容不完整，请勿替换课表。');
+                return;
+            }
+            var teacherNode = card.querySelector('.mtt_item_jxbmc');
+            var teacher = teacherNode ? normalize(teacherNode.textContent) : '';
+            if (name.length > 200 || teacher.length > 200 || time.length > 400) {
+                warn('课程卡片字段过长，页面可能未正常显示课表，请重新抓取。');
+                return;
+            }
+            if (cards.length >= MAX_CARDS) {
+                warn('课程卡片数量超过 ' + MAX_CARDS + '，抓取内容不完整，请勿替换课表。');
+                return;
+            }
+            cards.push({
+                week: positiveAttribute(cell, 'data-week', 0),
+                beginUnit: positiveAttribute(cell, 'data-begin-unit', 0),
+                endUnit: positiveAttribute(cell, 'data-end-unit', 0),
+                name: name,
+                teacher: teacher,
+                time: time,
+            });
+        }
+    }
+
     function boundedUtf8(value, availableBytes) {
         var bytes = 0;
         var index = 0;
@@ -308,6 +355,7 @@
         }
         documents.push(doc);
         try { readTables(doc); } catch (ignored) { warn('部分表格抓取失败，请勿替换课表。'); }
+        try { readCards(doc); } catch (ignoredCards) { warn('部分课程卡片抓取失败，请勿替换课表。'); }
         try { saveSnapshot(doc, documents.length - 1); } catch (ignoredSnapshot) { warn('页面快照保存失败，请重新抓取。'); }
         var frames = doc.querySelectorAll('iframe, frame');
         for (var i = 0; i < frames.length; i++) {
@@ -328,5 +376,5 @@
     }
 
     try { visit(document, 0); } catch (ignored) { warn('页面抓取失败，请重新打开课表页面。'); }
-    return JSON.stringify({ url: location.href, tables: tables, warnings: warnings, html: snapshots.join('') });
+    return JSON.stringify({ url: location.href, tables: tables, cards: cards, warnings: warnings, html: snapshots.join('') });
 })();

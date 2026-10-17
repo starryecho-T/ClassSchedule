@@ -17,6 +17,7 @@ object JluScheduleParser {
     data class Capture(
         val sourceUrl: String,
         val tables: List<ScheduleTable>,
+        val cards: List<GridCard>,
         val warnings: List<String>,
         val html: String,
     )
@@ -45,13 +46,45 @@ object JluScheduleParser {
         val rawWarnings = json.getJSONArray("warnings")
         require(rawWarnings.length() <= 100) { "页面诊断数量异常" }
         val warnings = (0 until rawWarnings.length()).map { rawWarnings.getString(it).take(300) }
+        val cards = decodeCards(json.optJSONArray("cards"))
         val html = json.getString("html")
         require(html.length <= 2 * 1024 * 1024) { "页面快照过大" }
-        return Capture(json.optString("url").take(2048), tables, warnings, html)
+        return Capture(json.optString("url").take(2048), tables, cards, warnings, html)
+    }
+
+    /** 网格课表卡片（td[data-role="item"]）作为不可信输入处理：数量与字段必须先过校验。 */
+    private fun decodeCards(rawCards: org.json.JSONArray?): List<GridCard> {
+        if (rawCards == null) return emptyList()
+        require(rawCards.length() <= 300) { "课程卡片数量异常" }
+        return (0 until rawCards.length()).map { index ->
+            val item = rawCards.getJSONObject(index)
+            fun unit(name: String): Int {
+                val value = item.optInt(name, 0)
+                require(value in 0..12) { "课程卡片 $name 属性异常" }
+                return value
+            }
+            fun text(name: String, max: Int): String {
+                val value = item.optString(name, "")
+                require(value.length <= max) { "课程卡片 $name 过长" }
+                return value
+            }
+            GridCard(
+                week = unit("week"),
+                beginUnit = unit("beginUnit"),
+                endUnit = unit("endUnit"),
+                name = text("name", 200),
+                teacher = text("teacher", 200),
+                time = text("time", 400),
+            )
+        }
     }
 
     fun parse(capture: Capture): ScheduleParseResult {
-        val result = ScheduleTableParser.parse(capture.tables)
+        val result = if (capture.cards.isNotEmpty()) {
+            GridScheduleParser.parse(capture.cards)
+        } else {
+            ScheduleTableParser.parse(capture.tables)
+        }
         return result.copy(issues = (capture.warnings + result.issues).distinct())
     }
 

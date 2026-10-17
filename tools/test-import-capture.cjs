@@ -38,11 +38,30 @@ function runMockTests() {
         removeChild(child) { this.childNodes.splice(this.childNodes.indexOf(child), 1); this.link(); }
         querySelectorAll(selector) {
             const result = [];
-            const matches = element => selector.split(',').some(part => {
-                part = part.trim();
-                const attr = /^\[role="([^"]+)"\]$/.exec(part);
-                return part === '*' || (attr ? element.getAttribute('role') === attr[1] : element.tagName === part.toUpperCase());
-            });
+            // 支持 tag.class[attr="value"] 复合选择器（脚本中 td[data-role="item"] 依赖它）。
+            const matchesPart = (element, part) => {
+                let rest = part;
+                const tag = /^([-\w]+)/.exec(rest);
+                if (tag) {
+                    if (tag[1].toUpperCase() !== element.tagName) return false;
+                    rest = rest.slice(tag[0].length);
+                }
+                while (rest.length > 0) {
+                    const attr = /^\[([-\w]+)="([^"]*)"\]/.exec(rest);
+                    const cls = /^\.([-\w]+)/.exec(rest);
+                    if (attr) {
+                        if (element.getAttribute(attr[1]) !== attr[2]) return false;
+                        rest = rest.slice(attr[0].length);
+                    } else if (cls) {
+                        if ((element.getAttribute('class') || '').split(/\s+/).indexOf(cls[1]) < 0) return false;
+                        rest = rest.slice(cls[0].length);
+                    } else {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            const matches = element => selector.split(',').some(part => part.trim() === '*' || matchesPart(element, part.trim()));
             const walk = parent => { for (const child of parent.childNodes) if (child.nodeType === 1) { if (matches(child)) result.push(child); walk(child); } };
             walk(this); return result;
         }
@@ -90,6 +109,26 @@ function runMockTests() {
     test('virtual ARIA grid warning', () => { assert(capture(doc(el('div', { role: 'grid', 'aria-rowcount': '10' }, el('div', { role: 'row', 'aria-rowindex': '5' }, el('span', { role: 'cell' }, '数学'))))).warnings.length > 0); });
     test('same-origin frame', () => { const frame = el('iframe'); frame.contentDocument = doc(table(row(cell('Frame')))); const result = capture(doc(frame)); assert.deepStrictEqual(result.tables, [{ rows: [['Frame']] }]); assert(result.html.includes('Same-origin frame snapshot')); });
     test('cross-origin frame warning', () => { const frame = el('iframe'); frame.contentDocument = null; Object.defineProperty(frame, 'contentWindow', { get() { throw new Error('SecurityError'); } }); assert(capture(doc(frame)).warnings.some(item => item.includes('跨域'))); });
+    test('JLU grid course cards', () => {
+        const card = el('div', { class: 'mtt_arrange_item' },
+            el('div', { class: 'mtt_item_kcmc' }, '概率论与数理统计B[07]',
+                el('div', { class: 'bh-clearfix jsrs-cont' }, el('div', { class: 'mtt_item_jxbmc bh-pull-left' }, '李亚军'))),
+            el('div', { class: 'mtt_item_room' }, '1-2周,4周,星期4,第1节-第2节,前卫-李四光楼-第二阶梯（地学优先）',
+                el('a', { class: 'room-preview', href: 'javascript:void(0)' })),
+        );
+        const item = el('td', { 'data-role': 'item', 'data-week': '4', 'data-begin-unit': '1', 'data-end-unit': '1', rowspan: '2' }, card);
+        const result = capture(doc(table(row(el('td', { class: 'mtt_bgcolor_grey' }, '节次/星期'), el('td', { 'data-week': '1' }, '星期一')), row(item))));
+        assert.deepStrictEqual(result.cards, [{ week: 4, beginUnit: 1, endUnit: 1, name: '概率论与数理统计B[07]', teacher: '李亚军', time: '1-2周,4周,星期4,第1节-第2节,前卫-李四光楼-第二阶梯（地学优先）' }]);
+    });
+    test('JLU empty placeholder cells are skipped', () => {
+        const result = capture(doc(table(row(el('td', { 'data-role': 'item' }, el('div', { class: 'mtt_arrange_item' }))))));
+        assert.deepStrictEqual(result.cards, []);
+    });
+    test('JLU card missing time stops the capture', () => {
+        const result = capture(doc(table(row(el('td', { 'data-role': 'item', 'data-week': '1', 'data-begin-unit': '1', 'data-end-unit': '1' }, el('div', { class: 'mtt_arrange_item' }, el('div', { class: 'mtt_item_kcmc' }, '只有课程名')))))));
+        assert.deepStrictEqual(result.cards, []);
+        assert(result.warnings.some(item => item.includes('不完整')));
+    });
     test('snapshot strips credentials without mutation', () => { const password = el('input', { type: 'password', value: 'PRIVATE' }); const page = doc(table(row(cell('Course'))), password, el('script', {}, 'SECRET')); const result = capture(page); assert(!result.html.includes('PRIVATE') && !result.html.includes('SECRET')); assert(password.getAttribute('value') === 'PRIVATE'); });
     test('table count warning', () => { const result = capture(doc(...Array.from({ length: 41 }, (_, i) => table(row(cell(String(i))))))); assert(result.tables.length === 40 && result.warnings.length > 0); });
     test('global row count warning', () => { const result = capture(doc(table(...Array.from({ length: 600 }, () => row(cell('A')))), table(...Array.from({ length: 600 }, () => row(cell('B')))))); assert(result.tables.reduce((sum, item) => sum + item.rows.length, 0) === 1000 && result.warnings.length > 0); });

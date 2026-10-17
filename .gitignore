@@ -26,3 +26,7 @@ Thumbs.db
 
 # 日志
 *.log
+
+# 本地课表快照（含真实课程/教师/教室信息，勿提交）
+schedule_snapshot.html
+schedule_snapshot*.html
