@@ -271,37 +271,46 @@
 
     // JLU 网格课表：td[data-role="item"] 的属性给出结构位置，卡片内文本给出时间与地点。
     // 只做结构提取，时间语义由应用端解析器校验。
+    // 注意：真实页面 data-end-unit 恒等于 data-begin-unit，真实跨度由 rowspan 表达；
+    // 一个格子可含多张卡片（同一时段、不同周次/教师），必须全部提取，否则静默丢课。
     function readCards(doc) {
         var cells = doc.querySelectorAll('td[data-role="item"]');
         for (var i = 0; i < cells.length; i++) {
             var cell = cells[i];
             if (!visible(cell)) continue;
-            var card = cell.querySelector('.mtt_arrange_item') || cell;
-            var name = directText(card.querySelector('.mtt_item_kcmc'));
-            var time = directText(card.querySelector('.mtt_item_room'));
-            if (!name && !time) continue; // 空占位格
-            if (!name || !time) {
-                warn('课程卡片缺少课程名或上课时间，抓取内容不完整，请勿替换课表。');
-                return;
+            var week = positiveAttribute(cell, 'data-week', 0);
+            var beginUnit = positiveAttribute(cell, 'data-begin-unit', 0);
+            var rowSpan = positiveAttribute(cell, 'rowspan', 1);
+            var endUnit = beginUnit > 0 ? beginUnit + rowSpan - 1 : positiveAttribute(cell, 'data-end-unit', 0);
+            var cardsInCell = cell.querySelectorAll('.mtt_arrange_item');
+            for (var j = 0; j < cardsInCell.length; j++) {
+                var card = cardsInCell[j];
+                var name = directText(card.querySelector('.mtt_item_kcmc'));
+                var time = directText(card.querySelector('.mtt_item_room'));
+                if (!name && !time) continue; // 空占位卡片
+                if (!name || !time) {
+                    warn('课程卡片缺少课程名或上课时间，抓取内容不完整，请勿替换课表。');
+                    return;
+                }
+                var teacherNode = card.querySelector('.mtt_item_jxbmc');
+                var teacher = teacherNode ? normalize(teacherNode.textContent) : '';
+                if (name.length > 200 || teacher.length > 200 || time.length > 400) {
+                    warn('课程卡片字段过长，页面可能未正常显示课表，请重新抓取。');
+                    return;
+                }
+                if (cards.length >= MAX_CARDS) {
+                    warn('课程卡片数量超过 ' + MAX_CARDS + '，抓取内容不完整，请勿替换课表。');
+                    return;
+                }
+                cards.push({
+                    week: week,
+                    beginUnit: beginUnit,
+                    endUnit: endUnit,
+                    name: name,
+                    teacher: teacher,
+                    time: time,
+                });
             }
-            var teacherNode = card.querySelector('.mtt_item_jxbmc');
-            var teacher = teacherNode ? normalize(teacherNode.textContent) : '';
-            if (name.length > 200 || teacher.length > 200 || time.length > 400) {
-                warn('课程卡片字段过长，页面可能未正常显示课表，请重新抓取。');
-                return;
-            }
-            if (cards.length >= MAX_CARDS) {
-                warn('课程卡片数量超过 ' + MAX_CARDS + '，抓取内容不完整，请勿替换课表。');
-                return;
-            }
-            cards.push({
-                week: positiveAttribute(cell, 'data-week', 0),
-                beginUnit: positiveAttribute(cell, 'data-begin-unit', 0),
-                endUnit: positiveAttribute(cell, 'data-end-unit', 0),
-                name: name,
-                teacher: teacher,
-                time: time,
-            });
         }
     }
 

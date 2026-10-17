@@ -118,7 +118,17 @@ function runMockTests() {
         );
         const item = el('td', { 'data-role': 'item', 'data-week': '4', 'data-begin-unit': '1', 'data-end-unit': '1', rowspan: '2' }, card);
         const result = capture(doc(table(row(el('td', { class: 'mtt_bgcolor_grey' }, '节次/星期'), el('td', { 'data-week': '1' }, '星期一')), row(item))));
-        assert.deepStrictEqual(result.cards, [{ week: 4, beginUnit: 1, endUnit: 1, name: '概率论与数理统计B[07]', teacher: '李亚军', time: '1-2周,4周,星期4,第1节-第2节,前卫-李四光楼-第二阶梯（地学优先）' }]);
+        assert.deepStrictEqual(result.cards, [{ week: 4, beginUnit: 1, endUnit: 2, name: '概率论与数理统计B[07]', teacher: '李亚军', time: '1-2周,4周,星期4,第1节-第2节,前卫-李四光楼-第二阶梯（地学优先）' }]);
+    });
+    test('JLU multiple cards in one cell are all captured', () => {
+        const card1 = el('div', { class: 'mtt_arrange_item' }, el('div', { class: 'mtt_item_kcmc' }, '岩石学B', el('div', { class: 'bh-clearfix jsrs-cont' }, el('div', { class: 'mtt_item_jxbmc bh-pull-left' }, '刘娜'))), el('div', { class: 'mtt_item_room' }, '1-2周,4周,星期4,第1节-第2节,阶梯教室'));
+        const card2 = el('div', { class: 'mtt_arrange_item' }, el('div', { class: 'mtt_item_kcmc' }, '岩石学B', el('div', { class: 'bh-clearfix jsrs-cont' }, el('div', { class: 'mtt_item_jxbmc bh-pull-left' }, '苟军'))), el('div', { class: 'mtt_item_room' }, '10-12周,星期4,第1节-第2节,实验室132'));
+        const item = el('td', { 'data-role': 'item', 'data-week': '4', 'data-begin-unit': '1', 'data-end-unit': '1', rowspan: '2' }, card1, card2);
+        const result = capture(doc(table(row(item))));
+        assert.strictEqual(result.cards.length, 2);
+        assert.strictEqual(result.cards[0].teacher, '刘娜');
+        assert.strictEqual(result.cards[1].teacher, '苟军');
+        assert.strictEqual(result.cards[0].endUnit, 2);
     });
     test('JLU empty placeholder cells are skipped', () => {
         const result = capture(doc(table(row(el('td', { 'data-role': 'item' }, el('div', { class: 'mtt_arrange_item' }))))));
