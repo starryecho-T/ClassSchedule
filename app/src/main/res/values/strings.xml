@@ -70,4 +70,13 @@
     <string name="reminder_title_prefix">即将上课</string>
     <string name="reminder_granted">已开启上课提醒</string>
     <string name="reminder_denied">未授予通知权限，无法提醒</string>
+
+    <!-- 应用内更新检查 -->
+    <string name="update_available_title">发现新版本 %1$s</string>
+    <string name="update_download">前往下载</string>
+    <string name="update_skip">跳过此版本</string>
+    <string name="update_later">以后再说</string>
+    <string name="update_no_new">当前已是最新版本</string>
+    <string name="update_check">检查更新</string>
+    <string name="update_check_ing">正在检查更新…</string>
 </resources>
