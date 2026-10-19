@@ -81,7 +81,9 @@ class ReminderReceiver : BroadcastReceiver() {
         val repo = CourseRepository(context, AppDatabase.getDatabase(context).courseDao())
         reminderScope.launch {
             val course = repo.getById(courseId) ?: return@launch
-            val start = com.classschedule.app.data.JluTimeTable.PERIODS.first { it.index == course.startPeriod }.start
+            // 节次超出作息表（异常数据）时静默跳过该条提醒，不崩溃。
+            val start = com.classschedule.app.data.JluTimeTable.PERIODS
+                .firstOrNull { it.index == course.startPeriod }?.start ?: return@launch
             val open = PendingIntent.getActivity(
                 context, courseId.toInt(),
                 Intent(context, MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),

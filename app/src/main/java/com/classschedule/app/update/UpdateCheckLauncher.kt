@@ -34,15 +34,11 @@ object UpdateCheckLauncher {
         currentVersionName: String,
         userInitiated: Boolean,
     ) {
+        // lifecycleScope：Activity 销毁时自动取消网络等待，杜绝“回来弹窗时窗口已没了”。
         activity.lifecycleScope.launch(Dispatchers.IO) {
             val info = UpdateChecker.fetchLatest(OWNER, REPO) ?: run {
-                if (userInitiated) {
-                    activity.runOnUiThread {
-                        MaterialAlertDialogBuilder(activity)
-                            .setMessage(R.string.update_no_new)
-                            .setPositiveButton(android.R.string.ok, null)
-                            .show()
-                    }
+                if (userInitiated && activity.isActive) {
+                    activity.runOnUiThread { showAlert(activity, activity.getString(R.string.update_no_new)) }
                 }
                 return@launch
             }
@@ -50,21 +46,32 @@ object UpdateCheckLauncher {
                 .getString(KEY_SKIPPED, null)
             val newer = UpdateChecker.isNewer(info.versionName, currentVersionName)
             if (!newer || (!userInitiated && skipped == info.versionName)) {
-                if (userInitiated && !newer) {
-                    activity.runOnUiThread {
-                        MaterialAlertDialogBuilder(activity)
-                            .setMessage(R.string.update_no_new)
-                            .setPositiveButton(android.R.string.ok, null)
-                            .show()
-                    }
+                if (userInitiated && !newer && activity.isActive) {
+                    activity.runOnUiThread { showAlert(activity, activity.getString(R.string.update_no_new)) }
                 }
                 return@launch
             }
-            activity.runOnUiThread { showUpdateDialog(activity, info) }
+            if (activity.isActive) {
+                activity.runOnUiThread { showUpdateDialog(activity, info) }
+            }
         }
     }
 
+    /** 弹窗前的统一出口：窗口销毁/退出中直接放弃，避免 BadTokenException 崩溃。 */
+    private fun showAlert(activity: MainActivity, message: String) {
+        if (!activity.isActive) return
+        MaterialAlertDialogBuilder(activity)
+            .setMessage(message)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    /** Activity 仍可安全弹窗（未 finishing 且未 destroyed）。 */
+    private val MainActivity.isActive: Boolean
+        get() = !isFinishing && !isDestroyed
+
     private fun showUpdateDialog(context: MainActivity, info: UpdateInfo) {
+        if (!context.isActive) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val message = buildString {
             append(context.getString(R.string.update_available_title, info.versionName))

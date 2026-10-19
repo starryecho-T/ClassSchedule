@@ -31,7 +31,8 @@ object TodayPlan {
 
     /**
      * 计算某天的课程安排，按开始时间排序。
-     * 周次在学期范围外时返回空列表（放假/学期未开始）。
+     * 周次在学期范围外时返回空列表（放假/学期未开始）；
+     * 节次超出作息表范围（异常数据）的课程跳过，不崩溃。
      */
     fun entriesFor(courses: List<Course>, date: LocalDate): List<Entry> {
         val week = com.classschedule.app.data.TermCalendar.currentWeek(date)
@@ -39,9 +40,10 @@ object TodayPlan {
         val day = date.dayOfWeek.value
         return courses.asSequence()
             .filter { it.dayOfWeek == day && it.isThisWeek(week) }
-            .map { course ->
-                val start = JluTimeTable.PERIODS.first { it.index == course.startPeriod }
-                val end = JluTimeTable.PERIODS.first { it.index == course.endPeriod }
+            .mapNotNull { course ->
+                val start = JluTimeTable.PERIODS.firstOrNull { it.index == course.startPeriod }
+                val end = JluTimeTable.PERIODS.firstOrNull { it.index == course.endPeriod }
+                if (start == null || end == null) return@mapNotNull null
                 Entry(course, LocalTime.parse(start.start, timeParser), LocalTime.parse(end.end, timeParser))
             }
             .sortedWith(compareBy({ it.startTime }, { it.endTime }, { it.course.name }))
