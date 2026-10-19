@@ -2,6 +2,9 @@
 
 本目录存放仓库开发过程中沉淀的辅助脚本，不参与应用构建。
 
+> **协作约定：每次踩坑必须记录到 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)**
+> （日期 + 症状 + 根因 + 解法）。发布流程见其末尾的 checklist。
+
 ## push_via_api.py
 
 当本机 `github.com:443` 直连不通但 `api.github.com` 可达时，用 GitHub git data API
