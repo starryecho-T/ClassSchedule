@@ -1,0 +1,14 @@
+<resources>
+    <string name="import_address_hint">教务或 WebVPN 网址</string>
+    <string name="import_open_address">打开</string>
+    <string name="import_reload">刷新</string>
+    <string name="import_home">教务首页</string>
+    <string name="import_loading_page">正在加载网页…</string>
+    <string name="import_page_ready">请在网页中登录并打开课表，然后点击“一键识别课表”。</string>
+    <string name="import_network_failed">网页未能加载（错误 %1$d）。请检查网络、修改网址或点击“刷新”。</string>
+    <string name="import_http_failed">网站返回 HTTP %1$d，请检查网址或稍后刷新。</string>
+    <string name="import_ssl_failed">网站证书验证失败，连接已停止。请核对网址及设备时间，或联系学校。</string>
+    <string name="import_loading_slow">网页加载时间较长。可点击“刷新”，或输入学校的 WebVPN 网址后打开。</string>
+    <string name="import_link_blocked">此链接无法在导入页打开，请使用 HTTPS 教务或 WebVPN 网址。</string>
+    <string name="import_navigation_help">输入吉大教务或学校 WebVPN 网址，在本页登录并打开“我的课表”，选择学期后点击“一键识别课表”。</string>
+</resources>

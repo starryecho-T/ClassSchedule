@@ -1,22 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/import_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fitsSystemWindows="true">
+        android:layout_height="wrap_content">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/import_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:navigationIcon="?attr/homeAsUpIndicator"
-            android:title="@string/import_title" />
+            app:navigationIcon="?attr/homeAsUpIndicator"
+            app:title="@string/import_title"
+            app:menu="@menu/menu_import" />
     </com.google.android.material.appbar.AppBarLayout>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="12dp" android:paddingTop="4dp">
+        <com.google.android.material.textfield.TextInputLayout android:id="@+id/import_address_layout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:hint="@string/import_address_hint">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/import_address"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:inputType="textUri" android:imeOptions="actionGo" android:maxLines="1" android:singleLine="true"
+                android:importantForAutofill="no" android:selectAllOnFocus="true" android:textSize="14sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.button.MaterialButton android:id="@+id/import_open"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginStart="8dp" android:text="@string/import_open_address" />
+    </LinearLayout>
+    <ProgressBar android:id="@+id/import_page_progress" style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent" android:layout_height="3dp" android:indeterminate="true"
+        android:visibility="gone" android:contentDescription="@string/import_loading_page" />
 
     <TextView
         android:layout_width="match_parent"
@@ -25,7 +45,7 @@
         android:paddingEnd="16dp"
         android:paddingTop="8dp"
         android:paddingBottom="8dp"
-        android:text="@string/import_instructions"
+        android:text="@string/import_navigation_help"
         android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="12sp" />
 
@@ -65,6 +85,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_import_parse"
+            android:enabled="false"
             style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
