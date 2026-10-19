@@ -1,0 +1,23 @@
+<resources>
+    <color name="timetable_grid">#30FFFFFF</color>
+    <color name="timetable_label">#BAC5CE</color>
+    <color name="timetable_today_column">#124F6890</color>
+    <color name="timetable_today_pill">#B4C8E6</color>
+    <color name="timetable_on_today">#192C46</color>
+    <color name="widget_background">#232830</color>
+    <color name="widget_outline">#48515E</color>
+    <color name="widget_header">#BECCE2</color>
+    <color name="widget_text">#E0E5ED</color>
+    <array name="course_palette">
+        <item>#E1B1B6</item>
+        <item>#D7B2C5</item>
+        <item>#CDB9DF</item>
+        <item>#B9C1EA</item>
+        <item>#AFCDE2</item>
+        <item>#A9D3CA</item>
+        <item>#B8D1AE</item>
+        <item>#E0BEA8</item>
+        <item>#D4C2B9</item>
+        <item>#BCCAD6</item>
+    </array>
+</resources>

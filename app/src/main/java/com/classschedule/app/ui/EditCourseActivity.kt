@@ -134,7 +134,7 @@ class EditCourseActivity : AppCompatActivity() {
 
     /** 色板：圆形色块，选中不透明、其余半透明。 */
     private fun buildColorRow(row: LinearLayout) {
-        CourseColors.PALETTE.forEachIndexed { index, color ->
+        CourseColors.palette(this).forEachIndexed { index, color ->
             val view = View(this)
             view.layoutParams = LinearLayout.LayoutParams(dp(40), dp(40)).apply {
                 marginEnd = dp(12)
@@ -144,6 +144,8 @@ class EditCourseActivity : AppCompatActivity() {
                 setColor(color)
             }
             view.setOnClickListener { selectColor(index) }
+            view.contentDescription = "课程颜色 ${index + 1}"
+            view.isFocusable = true
             row.addView(view)
             colorViews.add(view)
         }
@@ -152,7 +154,13 @@ class EditCourseActivity : AppCompatActivity() {
 
     private fun selectColor(index: Int) {
         selectedColor = index
-        colorViews.forEachIndexed { i, view -> view.alpha = if (i == index) 1f else 0.4f }
+        colorViews.forEachIndexed { i, view ->
+            val selected = i == Math.floorMod(index, colorViews.size)
+            view.alpha = if (selected) 1f else 0.6f
+            view.isSelected = selected
+            (view.background as GradientDrawable).setStroke(if (selected) dp(3) else 0,
+                com.google.android.material.color.MaterialColors.getColor(view, com.google.android.material.R.attr.colorOnSurface))
+        }
     }
 
     /** 编辑模式：从数据库回填已有课程。 */

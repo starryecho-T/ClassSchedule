@@ -12,8 +12,9 @@ android {
         applicationId = "com.classschedule.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "0.8.3"
+        versionCode = 21
+        versionName = "0.9.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -67,6 +68,7 @@ dependencies {
 
     // 测试
     testImplementation("junit:junit:4.13.2")
+    implementation("com.google.code.gson:gson:2.10.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }

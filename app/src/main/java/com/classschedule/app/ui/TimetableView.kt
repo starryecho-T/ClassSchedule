@@ -1,7 +1,7 @@
 package com.classschedule.app.ui
 
 import android.content.Context
-import android.content.res.Configuration
+import com.classschedule.app.R
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
@@ -44,17 +44,12 @@ class TimetableView @JvmOverloads constructor(
     private val blockRadius = dp(6f)
 
     // ---------- 颜色（深色模式自适应） ----------
-    private val isNight =
-        (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-            Configuration.UI_MODE_NIGHT_YES
-
-    private val gridColor = if (isNight) 0x30FFFFFF else 0x15000000
-    private val labelColor = if (isNight) 0xFFB0BEC5.toInt() else 0xFF78909C.toInt()
-    private val todayColumnColor = if (isNight) 0x14FFFFFF else 0x0D1E88E5
-    private val todayPillColor = 0xFF1E88E5.toInt()
-
-    /** 课程调色板：与编辑页共享（见 [CourseColors]）。 */
-    private val palette = CourseColors.PALETTE
+    private val gridColor = context.getColor(R.color.timetable_grid)
+    private val labelColor = context.getColor(R.color.timetable_label)
+    private val todayColumnColor = context.getColor(R.color.timetable_today_column)
+    private val todayPillColor = context.getColor(R.color.timetable_today_pill)
+    private val todayTextColor = context.getColor(R.color.timetable_on_today)
+    private val palette = CourseColors.palette(context)
 
     private val dayNames = arrayOf("一", "二", "三", "四", "五", "六", "日")
 
@@ -184,8 +179,8 @@ class TimetableView @JvmOverloads constructor(
                     RectF(cx - pillW / 2f, dp(4f), cx + pillW / 2f, dp(4f) + pillH),
                     dp(10f), dp(10f), fillPaint
                 )
-                dayPaint.color = 0xFFFFFFFF.toInt()
-                datePaint.color = 0xE6FFFFFF.toInt()
+                dayPaint.color = todayTextColor
+                datePaint.color = todayTextColor
             } else {
                 dayPaint.color = labelColor
                 datePaint.color = labelColor

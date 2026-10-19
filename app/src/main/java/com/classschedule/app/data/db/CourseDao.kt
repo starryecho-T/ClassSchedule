@@ -8,6 +8,9 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
 import com.classschedule.app.data.ImportPolicy
+import com.classschedule.app.data.backup.BackupRestorePolicy
+import com.classschedule.app.data.backup.RestoreResult
+import com.classschedule.app.data.backup.StaleBackupPreviewException
 import kotlinx.coroutines.flow.Flow
 
 /** 课程表数据访问对象。 */
@@ -68,6 +71,22 @@ interface CourseDao {
 
     @Delete
     suspend fun delete(course: CourseEntity)
+
+    /** Restore is distinct from academic import: preserve hidden weeks and duplicate rows. */
+    @Transaction
+    suspend fun restoreBackup(
+        rows: List<CourseEntity>,
+        replace: Boolean,
+        expected: List<CourseEntity>,
+    ): RestoreResult {
+        val prepared = BackupRestorePolicy.prepare(rows)
+        val current = getAllOnce()
+        if (replace && !BackupRestorePolicy.sameSnapshot(current, expected)) throw StaleBackupPreviewException()
+        val incoming = if (replace) prepared else BackupRestorePolicy.additions(current, prepared)
+        if (replace) deleteAll()
+        if (incoming.isNotEmpty()) insertAll(incoming)
+        return RestoreResult(incoming.size, if (replace) 0 else prepared.size - incoming.size, replace)
+    }
 
     @Query("DELETE FROM courses WHERE id = :id")
     suspend fun deleteById(id: Long)

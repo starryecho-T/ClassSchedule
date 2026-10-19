@@ -10,10 +10,14 @@ import com.classschedule.app.data.TodayPlan
 import com.classschedule.app.data.CourseRepository
 import com.classschedule.app.data.db.AppDatabase
 import com.classschedule.app.model.Course
+import com.classschedule.app.ui.ThemePreferences
+import android.content.res.Configuration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineExceptionHandler
+import android.util.Log
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -36,7 +40,8 @@ class TodayCourseWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
-        private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.IO +
+            CoroutineExceptionHandler { _, error -> Log.e("TodayWidget", "Widget refresh failed", error) })
 
         /** 立即刷新所有已添加的小组件（课程变更、日变更时调用）。 */
         fun refreshAll(context: Context) {
@@ -49,6 +54,11 @@ class TodayCourseWidgetProvider : AppWidgetProvider() {
         /** 渲染小组件内容。课程超过可视行数时截断并提示剩余条数。 */
         fun buildViews(context: Context, courses: List<Course>, date: LocalDate = LocalDate.now(), now: LocalTime = LocalTime.now()): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget_today)
+            val themed = ThemePreferences.widgetContext(context)
+            val dark = themed.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+            views.setInt(R.id.widget_root, "setBackgroundResource", if (dark) R.drawable.widget_bg_dark else R.drawable.widget_bg_light)
+            views.setTextColor(R.id.widget_header, themed.getColor(R.color.widget_header))
+            views.setTextColor(R.id.widget_body, themed.getColor(R.color.widget_text))
             val entries = TodayPlan.entriesFor(courses, date)
             views.setTextViewText(R.id.widget_header, TodayPlan.header(date))
             if (entries.isEmpty()) {

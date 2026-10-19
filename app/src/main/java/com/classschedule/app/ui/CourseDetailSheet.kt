@@ -35,7 +35,7 @@ class CourseDetailSheet(
     }
 
     private fun bindViews() {
-        val color = CourseColors.PALETTE[course.colorIndex % CourseColors.PALETTE.size]
+        val color = CourseColors.color(context, course.colorIndex)
         val empty = context.getString(R.string.sheet_empty_hint)
 
         findViewById<View>(R.id.sheet_color_bar)!!.setBackgroundColor(color)

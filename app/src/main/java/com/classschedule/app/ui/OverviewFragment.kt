@@ -20,6 +20,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
 import java.time.LocalDate
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filterNotNull
 
 /**
  * 日程概览（M4）：按天浏览课程（借鉴 thu-info 的日程列表视图）。
@@ -27,9 +28,9 @@ import kotlinx.coroutines.launch
  * 顶部为周内 7 天日期条（默认选中今天），下方按节次排序列出选中日的课程卡片；
  * 周切换与主界面周视图一致，数据经 Room Flow 自动刷新，点击卡片复用课程详情弹窗。
  */
-class ScheduleOverviewActivity : AppCompatActivity() {
+class OverviewFragment : CourseFragment(R.layout.fragment_overview) {
 
-    private val viewModel: MainViewModel by viewModels { MainViewModel.Factory }
+
 
     /** 当前查看的周次，默认定位到本周。 */
     private var selectedWeek: Int = TermCalendar.currentWeek().coerceIn(1, TermCalendar.TOTAL_WEEKS)
@@ -39,38 +40,34 @@ class ScheduleOverviewActivity : AppCompatActivity() {
 
     private var latestCourses: List<Course> = emptyList()
 
-    private lateinit var toolbar: MaterialToolbar
-    private lateinit var weekLabel: TextView
-    private lateinit var dayBar: LinearLayout
-    private lateinit var courseList: LinearLayout
-    private lateinit var emptyHint: TextView
+    private val toolbar: MaterialToolbar get() = requireView().findViewById(R.id.overview_toolbar)
+    private val weekLabel: TextView get() = requireView().findViewById(R.id.overview_week_label)
+    private val dayBar: LinearLayout get() = requireView().findViewById(R.id.overview_day_bar)
+    private val courseList: LinearLayout get() = requireView().findViewById(R.id.overview_course_list)
+    private val emptyHint: TextView get() = requireView().findViewById(R.id.overview_empty)
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_schedule_overview)
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        selectedWeek = savedInstanceState?.getInt("week", selectedWeek)?.coerceIn(1, TermCalendar.TOTAL_WEEKS) ?: selectedWeek
+        selectedDay = savedInstanceState?.getInt("day", selectedDay)?.coerceIn(1, 7) ?: selectedDay
+        savedScroll = savedInstanceState?.getInt("scroll", savedScroll) ?: savedScroll
+        toolbar.setTitle(R.string.overview_title)
 
-        toolbar = findViewById(R.id.overview_toolbar)
-        toolbar.setNavigationOnClickListener { finish() }
-
-        findViewById<MaterialButton>(R.id.overview_prev).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.overview_prev).setOnClickListener {
             switchWeek(selectedWeek - 1)
         }
-        findViewById<MaterialButton>(R.id.overview_next).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.overview_next).setOnClickListener {
             switchWeek(selectedWeek + 1)
         }
-        findViewById<MaterialButton>(R.id.overview_today).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.overview_today).setOnClickListener {
             selectedWeek = TermCalendar.currentWeek().coerceIn(1, TermCalendar.TOTAL_WEEKS)
             selectedDay = LocalDate.now().dayOfWeek.value
             rerender()
         }
-        weekLabel = findViewById(R.id.overview_week_label)
-        dayBar = findViewById(R.id.overview_day_bar)
-        courseList = findViewById(R.id.overview_course_list)
-        emptyHint = findViewById(R.id.overview_empty)
 
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.courses.collect { courses ->
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                viewModel.courseState.filterNotNull().collect { courses ->
                     latestCourses = courses
                     rerender()
                 }
@@ -96,8 +93,12 @@ class ScheduleOverviewActivity : AppCompatActivity() {
         } else {
             getString(R.string.week_label_fmt, selectedWeek)
         }
+        val scroll = requireView().findViewById<androidx.core.widget.NestedScrollView>(R.id.overview_scroll)
+        val position = if (savedScroll >= 0) savedScroll else scroll.scrollY
         renderDayBar(dates)
         renderCourseList()
+        scroll.post { scroll.scrollTo(0, position) }
+        savedScroll = -1
     }
 
     /** 生成周内 7 天日期条：选中日填充主色、今天以主色数字强调。 */
@@ -157,7 +158,7 @@ class ScheduleOverviewActivity : AppCompatActivity() {
 
         dayCourses.forEach { course ->
             val item = layoutInflater.inflate(R.layout.item_day_course, courseList, false)
-            val color = CourseColors.PALETTE[course.colorIndex % CourseColors.PALETTE.size]
+            val color = CourseColors.color(requireContext(), course.colorIndex)
             item.findViewById<View>(R.id.item_color_bar).setBackgroundColor(color)
             item.findViewById<TextView>(R.id.item_course_name).text = course.name
             item.findViewById<TextView>(R.id.item_weeks).text = Course.weeksText(course.weeks)
@@ -174,25 +175,19 @@ class ScheduleOverviewActivity : AppCompatActivity() {
             item.findViewById<TextView>(R.id.item_teacher_room).text =
                 teacherRoom.ifEmpty { getString(R.string.sheet_empty_hint) }
 
-            item.setOnClickListener { showDetail(course) }
+            item.setOnClickListener { showCourseDetail(course, selectedWeek) }
             courseList.addView(item)
         }
     }
 
-    /** 复用主界面的课程详情弹窗（编辑 / 删除 / 隐藏）。 */
-    private fun showDetail(course: Course) {
-        CourseDetailSheet(
-            context = this,
-            course = course,
-            selectedWeek = selectedWeek,
-            onEdit = { startActivity(EditCourseActivity.intent(this, course.id)) },
-            onDelete = { viewModel.deleteCourse(course.id) },
-            onHideWeeks = { weeks -> viewModel.hideCourseWeeks(course, weeks) },
-            onRestore = { viewModel.restoreCourse(course) },
-        ).open()
+    private var savedScroll = -1
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("week", selectedWeek)
+        outState.putInt("day", selectedDay)
+        outState.putInt("scroll", view?.findViewById<androidx.core.widget.NestedScrollView>(R.id.overview_scroll)?.scrollY ?: savedScroll)
+        super.onSaveInstanceState(outState)
     }
-
     private companion object {
-        val DAY_NAMES = listOf("一", "二", "三", "四", "五", "六", "七")
+        val DAY_NAMES = listOf("一", "二", "三", "四", "五", "六", "日")
     }
 }

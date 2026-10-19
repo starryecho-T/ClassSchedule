@@ -1,249 +1,98 @@
 package com.classschedule.app
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
-import android.widget.ArrayAdapter
-import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import android.content.res.Configuration
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import com.classschedule.app.data.TermCalendar
-import com.classschedule.app.model.Course
 import com.classschedule.app.reminder.ReminderReceiver
-import com.classschedule.app.update.UpdateCheckLauncher
-import com.classschedule.app.ui.CourseDetailSheet
-import com.classschedule.app.ui.EditCourseActivity
-import com.classschedule.app.ui.ImportActivity
 import com.classschedule.app.ui.MainViewModel
-import com.classschedule.app.ui.ScheduleOverviewActivity
-import com.classschedule.app.ui.TimetableView
-import com.google.android.material.appbar.MaterialToolbar
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import kotlinx.coroutines.launch
+import com.classschedule.app.ui.MineFragment
+import com.classschedule.app.ui.OverviewFragment
+import com.classschedule.app.ui.ScheduleFragment
+import com.classschedule.app.update.UpdateCheckLauncher
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
-/**
- * 主页面：顶栏 + 周次切换条（M3 起支持表头具体日期与周次切换），
- * 内容区为周视图课表，数据来自 Room 自动刷新。
- */
+/** Navigation owns no tab view state. FragmentManager restores the same tagged instances. */
 class MainActivity : AppCompatActivity() {
-
     private val viewModel: MainViewModel by viewModels { MainViewModel.Factory }
-
-    /** M5-2：通知权限请求结果 —— 授权后立即重算提醒闹钟。 */
-    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val message = if (granted) R.string.reminder_granted else R.string.reminder_denied
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    private var selectedTab = R.id.tab_schedule
+    private lateinit var navigation: BottomNavigationView
+    private val back = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() { navigation.selectedItemId = R.id.tab_schedule }
+    }
+    private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        Toast.makeText(this, if (granted) R.string.reminder_granted else R.string.reminder_denied, Toast.LENGTH_SHORT).show()
         if (granted) ReminderReceiver.reschedule(this)
     }
-
-    /** 当前正在查看的周次（1..总周数），默认定位到本周。 */
-    private var selectedWeek: Int = TermCalendar.currentWeek().coerceIn(1, TermCalendar.TOTAL_WEEKS)
-
-    /** Room 里最新的全量课程（切换周次时无需等待 Flow 重发）。 */
-    private var latestCourses: List<Course> = emptyList()
-
-    private lateinit var timetable: TimetableView
-    private lateinit var weekLabel: TextView
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selectedWeek = savedInstanceState?.getInt(STATE_SELECTED_WEEK, selectedWeek)
-            ?.coerceIn(1, TermCalendar.TOTAL_WEEKS) ?: selectedWeek
         setContentView(R.layout.activity_main)
-
-        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
-        setSupportActionBar(toolbar)
-
-        // M5-2：Android 13+ 首次进入请求通知权限（上课提醒依赖）；只请求一次。
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        val light = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK != Configuration.UI_MODE_NIGHT_YES
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
         }
-
-        timetable = findViewById(R.id.timetable)
-        // 点击课程块 -> 详情弹窗（不再直接进编辑页，借鉴 thu-info 交互）
-        timetable.onCourseClick = { course -> showCourseDetail(course) }
-        // 长按空白格 -> 预填星期与节次，快速加课
-        timetable.onEmptyCellLongClick = { day, period ->
-            startActivity(
-                EditCourseActivity.intent(this, prefillDay = day, prefillStartPeriod = period)
-            )
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main_root)) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            WindowInsetsCompat.CONSUMED
         }
-        // 横滑切换周次（借鉴 thu-info 的手势交互）
-        timetable.onWeekSwipe = { delta -> switchWeek(selectedWeek + delta) }
-
-        findViewById<MaterialButton>(R.id.week_prev).setOnClickListener {
-            switchWeek(selectedWeek - 1)
+        navigation = findViewById(R.id.bottom_navigation)
+        onBackPressedDispatcher.addCallback(this, back)
+        selectedTab = savedInstanceState?.getInt("tab", R.id.tab_schedule) ?: R.id.tab_schedule
+        if (selectedTab !in listOf(R.id.tab_schedule, R.id.tab_overview, R.id.tab_mine)) selectedTab = R.id.tab_schedule
+        navigation.selectedItemId = selectedTab
+        selectTab(selectedTab)
+        navigation.setOnItemSelectedListener { selectTab(it.itemId) }
+        val prefs = getSharedPreferences("permissions", MODE_PRIVATE)
+        if (Build.VERSION.SDK_INT >= 33 && !prefs.getBoolean("notification_asked", false) &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            prefs.edit().putBoolean("notification_asked", true).apply()
+            permission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        findViewById<MaterialButton>(R.id.week_next).setOnClickListener {
-            switchWeek(selectedWeek + 1)
+        if (!viewModel.startupUpdateChecked) {
+            viewModel.startupUpdateChecked = true
+            window.decorView.post { if (!isFinishing && !isDestroyed) checkForUpdate(false) }
         }
-        findViewById<MaterialButton>(R.id.week_today).setOnClickListener {
-            switchWeek(TermCalendar.currentWeek())
-        }
-        weekLabel = findViewById(R.id.week_label)
-
-        findViewById<FloatingActionButton>(R.id.fab_add).setOnClickListener {
-            startActivity(EditCourseActivity.intent(this))
-        }
-
-        // 课程数据变化时自动重绘当前查看的周
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.courses.collect { courses ->
-                    latestCourses = courses
-                    redraw()
-                }
-            }
-        }
-        updateWeekUi()
-
-        // 启动时静默检查新版本：延后到首帧之后执行，不占用启动路径。
-        window.decorView.post { checkForUpdate(userInitiated = false) }
     }
-
-    /** 查询 GitHub 最新 Release；有新版本则提示使用者。 */
-    private fun checkForUpdate(userInitiated: Boolean) {
-        val versionName = runCatching {
-            packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrNull() ?: return
-        UpdateCheckLauncher.check(this, versionName, userInitiated)
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        outState.putInt(STATE_SELECTED_WEEK, selectedWeek)
-        super.onSaveInstanceState(outState)
-    }
-
-    /** 顶栏菜单：日程概览、教务导入和隐藏课程管理。 */
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_main, menu)
+    private fun selectTab(id: Int): Boolean {
+        if (supportFragmentManager.isStateSaved) return false
+        val tag = "tab_$id"
+        val target = supportFragmentManager.findFragmentByTag(tag) ?: when (id) {
+            R.id.tab_overview -> OverviewFragment()
+            R.id.tab_mine -> MineFragment()
+            else -> ScheduleFragment()
+        }
+        val transaction = supportFragmentManager.beginTransaction().setReorderingAllowed(true)
+        supportFragmentManager.fragments.filter { it != target }.forEach {
+            transaction.hide(it).setMaxLifecycle(it, Lifecycle.State.STARTED)
+        }
+        if (!target.isAdded) {
+            transaction.add(R.id.tab_container, target, tag)
+        }
+        transaction.show(target).setMaxLifecycle(target, Lifecycle.State.RESUMED)
+            .setPrimaryNavigationFragment(target).commitNow()
+        selectedTab = id
+        back.isEnabled = id != R.id.tab_schedule
         return true
     }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_overview -> {
-                startActivity(Intent(this, ScheduleOverviewActivity::class.java))
-                true
-            }
-            R.id.action_import -> {
-                startActivity(Intent(this, ImportActivity::class.java))
-                true
-            }
-            R.id.action_hidden_courses -> {
-                showHiddenCourses()
-                true
-            }
-            R.id.action_check_update -> {
-                checkForUpdate(userInitiated = true)
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
+    fun checkForUpdate(userInitiated: Boolean) {
+        val version = packageManager.getPackageInfo(packageName, 0).versionName ?: return
+        UpdateCheckLauncher.check(this, version, userInitiated)
     }
-
-    /** 全部隐藏的课程也保留管理入口，点击后可在原详情页恢复。 */
-    private fun showHiddenCourses() {
-        val hiddenCourses = latestCourses.filter { it.hiddenWeeks.isNotEmpty() }
-            .sortedWith(compareBy(Course::dayOfWeek, Course::startPeriod, Course::endPeriod, Course::name, Course::id))
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.hidden_courses_title)
-            .setNegativeButton(android.R.string.cancel, null)
-        if (hiddenCourses.isEmpty()) {
-            dialog.setMessage(R.string.hidden_courses_empty).show()
-            return
-        }
-        val adapter = object : ArrayAdapter<Course>(this, android.R.layout.simple_list_item_2, hiddenCourses) {
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val view = convertView ?: layoutInflater.inflate(android.R.layout.simple_list_item_2, parent, false)
-                val course = hiddenCourses[position]
-                view.findViewById<TextView>(android.R.id.text1).apply {
-                    text = course.name
-                    setSingleLine(false)
-                    maxLines = 2
-                }
-                view.findViewById<TextView>(android.R.id.text2).apply {
-                    text = getString(
-                        R.string.hidden_course_details,
-                        "一二三四五六日".getOrNull(course.dayOfWeek - 1)?.toString().orEmpty(),
-                        course.startPeriod,
-                        course.endPeriod,
-                        course.hiddenWeeks.sorted().joinToString("、"),
-                        course.teacher.ifBlank { getString(R.string.sheet_empty_hint) },
-                        course.room.ifBlank { getString(R.string.sheet_empty_hint) },
-                    )
-                    setSingleLine(false)
-                    maxLines = Int.MAX_VALUE
-                }
-                return view
-            }
-        }
-        dialog.setAdapter(adapter) { _, position -> showCourseDetail(hiddenCourses[position]) }.show()
-    }
-
-    /** 课程详情底部弹窗：查看信息 + 编辑 / 删除 / 隐藏（M3）。 */
-    private fun showCourseDetail(course: Course) {
-        CourseDetailSheet(
-            context = this,
-            course = course,
-            selectedWeek = selectedWeek,
-            onEdit = { startActivity(EditCourseActivity.intent(this, course.id)) },
-            onDelete = { viewModel.deleteCourse(course.id) },
-            onHideWeeks = { weeks -> viewModel.hideCourseWeeks(course, weeks) },
-            onRestore = { viewModel.restoreCourse(course) },
-        ).open()
-    }
-
-    /** 切换到 [week]（自动限制在 1..总周数内）并重绘。 */
-    private fun switchWeek(week: Int) {
-        val target = week.coerceIn(1, TermCalendar.TOTAL_WEEKS)
-        if (target == selectedWeek) return
-        selectedWeek = target
-        redraw()
-        updateWeekUi()
-    }
-
-    private fun redraw() {
-        timetable.setup(
-            latestCourses,
-            selectedWeek,
-            TermCalendar.weekDates(selectedWeek),
-            TermCalendar.isCurrentWeek(selectedWeek),
-        )
-    }
-
-    /** 更新顶栏标题与周次切换条文案。 */
-    private fun updateWeekUi() {
-        supportActionBar?.apply {
-            title = getString(R.string.timetable_title, selectedWeek)
-            subtitle = getString(R.string.timetable_subtitle)
-        }
-        weekLabel.text = if (TermCalendar.isCurrentWeek(selectedWeek)) {
-            getString(R.string.week_label_current, selectedWeek)
-        } else {
-            getString(R.string.week_label_fmt, selectedWeek)
-        }
-    }
-
-    companion object {
-        private const val STATE_SELECTED_WEEK = "selected_week"
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("tab", selectedTab)
+        super.onSaveInstanceState(outState)
     }
 }
-
-

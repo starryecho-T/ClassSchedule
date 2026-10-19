@@ -2,6 +2,9 @@ package com.classschedule.app.data
 
 import android.content.Context
 import com.classschedule.app.data.db.CourseDao
+import com.classschedule.app.data.db.CourseEntity
+import com.classschedule.app.data.backup.BackupRestorePolicy
+import com.classschedule.app.data.backup.RestoreResult
 import com.classschedule.app.data.db.toDomain
 import com.classschedule.app.data.db.toEntity
 import com.classschedule.app.model.Course
@@ -88,12 +91,20 @@ class CourseRepository(
     private suspend fun markInitialized() {
         if (seedPrefs.getBoolean(SeedPolicy.INITIALIZED_KEY, false)) return
         withContext(Dispatchers.IO) {
-            // 用户操作先持久化状态，避免数据库已提交后再因状态写盘失败而误报。
             check(seedPrefs.edit().putBoolean(SeedPolicy.INITIALIZED_KEY, true).commit()) {
                 "无法保存课表初始化状态，请稍后重试"
             }
         }
     }
+
+    suspend fun backupSnapshot(): List<CourseEntity> = mutationMutex.withLock { dao.getAllOnce() }
+
+    suspend fun restoreBackup(courses: List<Course>, replace: Boolean, expected: List<CourseEntity>): RestoreResult =
+        mutationMutex.withLock {
+            val rows = BackupRestorePolicy.prepare(courses.map { it.toEntity() })
+            markInitialized()
+            dao.restoreBackup(rows, replace, expected)
+        }
 
     companion object {
         // Activity 和 Application 各自持有仓库实例，共享锁才能保护启动初始化。

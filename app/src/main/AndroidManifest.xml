@@ -32,11 +32,6 @@
             android:parentActivityName=".MainActivity" />
 
         <activity
-            android:name=".ui.ScheduleOverviewActivity"
-            android:exported="false"
-            android:parentActivityName=".MainActivity" />
-
-        <activity
             android:name=".ui.ImportActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />

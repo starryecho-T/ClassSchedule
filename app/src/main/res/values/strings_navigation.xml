@@ -1,0 +1,25 @@
+<resources>
+    <string name="github_project">GitHub 项目 · 欢迎 Star ★</string>
+    <string name="github_description">喜欢这款课表？欢迎到 GitHub 点亮 Star，反馈问题或参与改进。</string>
+    <string name="github_url" translatable="false">https://github.com/starryecho-T/ClassSchedule</string>
+    <string name="github_open_failed">没有可用的浏览器，项目地址已复制。</string>
+    <string name="previous_week_description">上一周</string>
+    <string name="next_week_description">下一周</string>
+    <string name="appearance_title">外观模式</string>
+    <string name="appearance_current">外观模式：%1$s</string>
+    <string-array name="appearance_modes">
+        <item>跟随系统</item>
+        <item>浅色</item>
+        <item>深色</item>
+    </string-array>
+    <string name="tab_schedule">课表</string>
+    <string name="tab_overview">日程</string>
+    <string name="tab_mine">我的</string>
+    <string name="backup_export">备份课表</string>
+    <string name="backup_restore">恢复课表</string>
+    <string name="backup_append">追加去重</string>
+    <string name="backup_replace">替换全部</string>
+    <string name="backup_confirm_replace">确认替换</string>
+    <string name="backup_busy">正在处理，请稍候…</string>
+    <string name="backup_version">ClassSchedule %1$s</string>
+</resources>

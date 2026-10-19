@@ -56,3 +56,27 @@
 4. `cp app/build/outputs/apk/debug/app-debug.apk ClassSchedule-X.Y.Z.apk`
 5. 网络通则 `git push origin main --tags` 后网页建 Release；不通则走第 4 条坑位的 API 流程
 6. 手机装新 APK 验证 → 更新 `D:\临时储存文件\` 的本地备份
+
+
+## 2026-10-19 · 0.9 开发验证
+
+### Gradle 启动时 Unable to establish loopback connection
+
+- 症状：JDK 17 下连接 Gradle daemon 失败，底层为 UnixDomainSockets.connect 的 Invalid argument。
+- 定位：Windows JDK 的 PipeImpl 使用 AF_UNIX，自动 socket 路径来源首先为 jdk.net.unixdomain.tmpdir / TEMP。当前环境默认路径无法连接。
+- 已验证解法：仅在构建进程设置 JAVA_HOME=D:/dev-tools/jdk-17、JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=D:/dev-tools/tmp（先创建目录）；不修改系统全局配置。
+- 设备测试依赖首次需要联网；本机旧代理不可用时，Gradle 命令增加 -Dhttp.proxyHost= -Dhttps.proxyHost=。下载完成后可用 --offline 验证。
+
+### 0.8.3 手机启动崩溃
+
+- 证据：Android 16 / PLF110 设备，0.8.3(20)，应用崩溃日志指向 ReminderReceiver.kt:72 的 setExactAndAllowWhileIdle。
+- 根因：POST_NOTIFICATIONS 已授权，但 SCHEDULE_EXACT_ALARM 未授权；未处理的 SecurityException 从协程抛出导致进程退出。
+- 修复：检查 canScheduleExactAlarms，并对授权检查后的权限撤销竞态捕获 SecurityException；无法精确调度时降级 setAndAllowWhileIdle。注册失败记录错误，不让可选提醒任务终止主应用。
+- 同步修正：保存已注册闹钟身份以取消失效安排、恢复后重算、广播使用 goAsync、凌晨重新安排、通知前重新核对课程日期与隐藏状态。
+
+### Git 显式清空代理后仍连接 127.0.0.1
+
+- 症状：git -c http.proxy= fetch 仍报连接本地代理失败。
+- 原因：进程还继承了 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY 环境变量。
+- 解法：仅在当前发布进程清空上述变量，并将 github.com、api.github.com 加入 NO_PROXY；本次 fetch 已验证可用，无需重建 API commit。
+- 历史 API 推送造成的本地 / 远端 commit SHA 分叉，先确认对应 tree 完全相同，再将本次新提交 rebase 到 origin/main；不使用 force push，不删除未提交工作。

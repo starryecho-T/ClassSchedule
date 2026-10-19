@@ -10,6 +10,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
+import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.classschedule.app.MainActivity
@@ -22,6 +24,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import com.classschedule.app.widget.TodayCourseWidgetProvider
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -37,53 +43,72 @@ import java.time.ZoneId
 class ReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
-            ACTION_SCHEDULE -> {
-                val courseId = intent.getLongExtra(EXTRA_COURSE_ID, 0L)
-                val notify = intent.getBooleanExtra(EXTRA_NOTIFY, false)
-                if (notify) {
-                    showNotification(context, courseId)
-                    rescheduleNext(context)
-                } else {
-                    scheduleFor(context)
+        val result = goAsync()
+        val app = context.applicationContext
+        reminderScope.launch {
+            try {
+                schedulingMutex.withLock {
+                    if (intent.action == ACTION_SCHEDULE && intent.getBooleanExtra(EXTRA_NOTIFY, false)) {
+                        showNotification(app, intent.getLongExtra(EXTRA_COURSE_ID, 0L))
+                    }
+                    scheduleFor(app)
+                    TodayCourseWidgetProvider.refreshAll(app)
                 }
-            }
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> scheduleFor(context)
+            } finally { result.finish() }
         }
     }
 
     /** 计算今日剩余提醒并注册闹钟。 */
-    private fun scheduleFor(context: Context) {
-        if (!hasNotificationPermission(context)) return
+    private suspend fun scheduleFor(context: Context) {
         val repo = CourseRepository(context, AppDatabase.getDatabase(context).courseDao())
-        reminderScope.launch {
+        run {
             val courses = repo.observeAll().first()
             val now = LocalDateTime.now()
-            val entries = TodayPlan.entriesFor(courses, now.toLocalDate())
+            val entries = if (hasNotificationPermission(context)) TodayPlan.entriesFor(courses, now.toLocalDate()) else emptyList()
             val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             // 先清掉旧课程维度的闹钟：重算必然覆盖更新的集合。
             cancelCourseAlarms(context, alarm)
+            // Retire v0.8 PendingIntent identities on upgrade without reusing truncated IDs.
+            courses.forEach { course ->
+                val old = PendingIntent.getBroadcast(context, course.id.toInt(),
+                    Intent(context, ReminderReceiver::class.java).setAction(ACTION_SCHEDULE),
+                    PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
+                old?.let { alarm.cancel(it); it.cancel() }
+            }
+            check(context.getSharedPreferences("reminder_alarms", Context.MODE_PRIVATE).edit()
+                .putStringSet("ids", entries.map { it.course.id.toString() }.toSet()).commit())
             entries.forEach { entry ->
                 val remindAt = LocalDateTime.of(now.toLocalDate(), entry.startTime)
                     .minusMinutes(TodayPlan.REMIND_MINUTES)
                 if (!remindAt.isBefore(now)) {
                     val pending = pendingFor(context, entry.course.id, notify = true)
                     val triggerAtMillis = remindAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                    alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
+                    AlarmPolicy.schedule(
+                        canExact = Build.VERSION.SDK_INT < 31 || alarm.canScheduleExactAlarms(),
+                        exact = { alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending) },
+                        approximate = { alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending) },
+                    )
                 }
             }
+            val tomorrow = now.toLocalDate().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, tomorrow, pendingFor(context, 0, notify = false))
         }
     }
 
     /** 弹出提醒并安排下一条（同一次也可能是本日最后一条）。 */
-    private fun showNotification(context: Context, courseId: Long) {
+    private suspend fun showNotification(context: Context, courseId: Long) {
+        if (!hasNotificationPermission(context)) return
         ensureChannel(context)
         val repo = CourseRepository(context, AppDatabase.getDatabase(context).courseDao())
-        reminderScope.launch {
-            val course = repo.getById(courseId) ?: return@launch
+        run {
+            val course = repo.getById(courseId) ?: return
+            val now = LocalDateTime.now()
+            val entry = TodayPlan.entriesFor(listOf(course), now.toLocalDate()).singleOrNull() ?: return
+            val remindAt = LocalDateTime.of(now.toLocalDate(), entry.startTime).minusMinutes(TodayPlan.REMIND_MINUTES)
+            if (now.isBefore(remindAt) || !now.toLocalTime().isBefore(entry.startTime)) return
             // 节次超出作息表（异常数据）时静默跳过该条提醒，不崩溃。
             val start = com.classschedule.app.data.JluTimeTable.PERIODS
-                .firstOrNull { it.index == course.startPeriod }?.start ?: return@launch
+                .firstOrNull { it.index == course.startPeriod }?.start ?: return
             val open = PendingIntent.getActivity(
                 context, courseId.toInt(),
                 Intent(context, MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
@@ -102,25 +127,27 @@ class ReminderReceiver : BroadcastReceiver() {
                 .setContentIntent(open)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .build()
-            manager(context).notify(courseId.toInt(), notification)
+            if (hasNotificationPermission(context)) {
+                try { manager(context).notify(courseId.toInt(), notification) }
+                catch (error: SecurityException) { Log.w("ClassReminder", "Notification permission changed", error) }
+            }
         }
     }
 
-    private fun rescheduleNext(context: Context) = scheduleFor(context)
-
     private fun cancelCourseAlarms(context: Context, alarm: AlarmManager) {
-        // 课程 id 空间即 requestCode 空间；逐 id 取消代价高，直接对已注册集合重算前取消全部即可：
-        // 由于每次 scheduleFor 都先调用本方法，闹钟集合始终与最新课表一致。
-        // 这里无法枚举系统闹钟，改为在注册时用相同 requestCode 覆盖 + 通知发出后 cancel。
-        // Android 侧无按 action 枚举 API，此函数保留为空实现以维持调用语义。
+        context.getSharedPreferences("reminder_alarms", Context.MODE_PRIVATE)
+            .getStringSet("ids", emptySet()).orEmpty().toSet().forEach { id ->
+                id.toLongOrNull()?.let { alarm.cancel(pendingFor(context, it, true)) }
+            }
     }
 
     private fun pendingFor(context: Context, courseId: Long, notify: Boolean): PendingIntent {
         val intent = Intent(context, ReminderReceiver::class.java).setAction(ACTION_SCHEDULE)
+            .setData(Uri.parse("classschedule://reminder/" + if (notify) courseId.toString() else "refresh"))
             .putExtra(EXTRA_COURSE_ID, courseId)
             .putExtra(EXTRA_NOTIFY, notify)
         return PendingIntent.getBroadcast(
-            context, courseId.toInt(), intent,
+            context, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
@@ -146,7 +173,9 @@ class ReminderReceiver : BroadcastReceiver() {
         const val ACTION_SCHEDULE = "com.classschedule.app.REMINDER_SCHEDULE"
         const val EXTRA_COURSE_ID = "course_id"
         const val EXTRA_NOTIFY = "notify"
-        val reminderScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private val schedulingMutex = Mutex()
+        val reminderScope = CoroutineScope(SupervisorJob() + Dispatchers.IO +
+            CoroutineExceptionHandler { _, error -> Log.e("ClassReminder", "Reminder refresh failed", error) })
 
         /** 对外入口：课程变更 / 页面进入时重算提醒。 */
         fun reschedule(context: Context) {

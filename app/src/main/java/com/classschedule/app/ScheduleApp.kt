@@ -1,11 +1,13 @@
 package com.classschedule.app
 
 import android.app.Application
+import android.content.res.Configuration
 import android.os.Process
 import com.classschedule.app.data.CourseRepository
 import com.classschedule.app.data.db.AppDatabase
 import com.classschedule.app.reminder.ReminderReceiver
 import com.classschedule.app.widget.TodayCourseWidgetProvider
+import com.classschedule.app.ui.ThemePreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +25,7 @@ class ScheduleApp : Application() {
         super.onCreate()
         instance = this
         installCrashGuard()
+        ThemePreferences.applySaved(this)
         val repo = CourseRepository(this, AppDatabase.getDatabase(this).courseDao())
         appScope.launch { repo.seedIfEmpty() }
         // M5：课程变化时刷新小组件并重算上课提醒（collectLatest 去抖：连续变更只处理最终态）。
@@ -36,7 +39,7 @@ class ScheduleApp : Application() {
 
     /**
      * 全局崩溃兜底：未捕获异常写入本地文件（下次启动可回传排查），
-     * 然后静默结束进程——避免系统弹出“由于自身原因造成异常”打扰使用者。
+     * 记录后交还系统崩溃处理；此记录器不能替代根因修复。
      * 兜底只做记录与退出，不吞掉异常后继续运行（那会导致更隐蔽的坏状态）。
      */
     private fun installCrashGuard() {
@@ -60,6 +63,11 @@ class ScheduleApp : Application() {
                 Runtime.getRuntime().exit(10)
             }
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        TodayCourseWidgetProvider.refreshAll(this)
     }
 
     companion object {

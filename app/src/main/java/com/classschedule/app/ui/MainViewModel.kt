@@ -11,16 +11,20 @@ import com.classschedule.app.model.Course
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** 主页 ViewModel：以响应式流暴露课程数据。 */
 class MainViewModel(private val repo: CourseRepository) : ViewModel() {
+    var startupUpdateChecked = false
     private val mutationMutex = Mutex()
 
-    val courses: StateFlow<List<Course>> = repo.observeAll()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val courseState: StateFlow<List<Course>?> = repo.observeAll()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val courses: StateFlow<List<Course>> = courseState.filterNotNull()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     suspend fun getCourse(id: Long): Course? = repo.getById(id)
 
