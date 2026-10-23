@@ -12,8 +12,8 @@ android {
         applicationId = "com.classschedule.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "0.9.1"
+        versionCode = 23
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -24,6 +24,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 发布沿用历史 debug 签名，老用户可直接覆盖安装（与 0.8.x/0.9.x 一致）
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
