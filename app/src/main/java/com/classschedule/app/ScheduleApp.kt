@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.res.Configuration
 import android.os.Process
 import com.classschedule.app.data.CourseRepository
+import com.classschedule.app.data.TermPreferences
 import com.classschedule.app.data.db.AppDatabase
 import com.classschedule.app.reminder.ReminderReceiver
 import com.classschedule.app.widget.TodayCourseWidgetProvider
@@ -28,9 +29,9 @@ class ScheduleApp : Application() {
         ThemePreferences.applySaved(this)
         val repo = CourseRepository(this, AppDatabase.getDatabase(this).courseDao())
         appScope.launch { repo.seedIfEmpty() }
-        // M5：课程变化时刷新小组件并重算上课提醒（collectLatest 去抖：连续变更只处理最终态）。
+        // M5：当前学期课程变化时刷新小组件并重算上课提醒（collectLatest 去抖：连续变更只处理最终态）。
         appScope.launch {
-            repo.observeAll().collectLatest {
+            repo.observeAll(TermPreferences.activeTerm(this@ScheduleApp).id).collectLatest {
                 TodayCourseWidgetProvider.refreshAll(this@ScheduleApp)
                 ReminderReceiver.reschedule(this@ScheduleApp)
             }

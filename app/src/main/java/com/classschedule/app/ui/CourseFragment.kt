@@ -7,11 +7,40 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.classschedule.app.R
 import com.classschedule.app.data.TermCalendar
+import com.classschedule.app.data.TermConfig
+import com.classschedule.app.data.Terms
 import com.classschedule.app.model.Course
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 abstract class CourseFragment(layout: Int) : Fragment(layout) {
     protected val viewModel: MainViewModel
         get() = ViewModelProvider(requireActivity(), MainViewModel.Factory)[MainViewModel::class.java]
+    /** 当前学期的快捷读取（周次计算等跟随学期切换）。 */
+    protected val activeTerm: TermConfig get() = viewModel.term.value
+
+    /** 学期切换对话框：列出内置校历学期，选择后全局重算周次与日期。
+     *
+     * 注意：AlertDialog 的消息区与单选列表互斥，不能再 setMessage，否则列表不显示。
+     * 开学日期已并入选项文案，弹窗不再额外放说明文字。
+     */
+    protected fun showTermPicker() {
+        val terms = Terms.available
+        val labels = terms.map { term ->
+            getString(
+                R.string.term_entry_fmt,
+                term.name, term.startDate.monthValue, term.startDate.dayOfMonth,
+            )
+        }
+        val checked = terms.indexOfFirst { it.id == activeTerm.id }.coerceAtLeast(0)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.term_switch_title)
+            .setSingleChoiceItems(labels.toTypedArray(), checked) { dialog, which ->
+                dialog.dismiss()
+                viewModel.selectTerm(terms[which])
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     /** 全部隐藏的课程也保留管理入口，点击后可在原详情页恢复。 */
     protected fun showHiddenCourses() {
         val hiddenCourses = viewModel.courses.value.filter { it.hiddenWeeks.isNotEmpty() }
@@ -48,7 +77,9 @@ abstract class CourseFragment(layout: Int) : Fragment(layout) {
                 return view
             }
         }
-        dialog.setAdapter(adapter) { _, position -> showCourseDetail(hiddenCourses[position], TermCalendar.currentWeek().coerceIn(1, TermCalendar.TOTAL_WEEKS)) }.show()
+        dialog.setAdapter(adapter) { _, position ->
+            showCourseDetail(hiddenCourses[position], TermCalendar.defaultWeek(activeTerm))
+        }.show()
     }
 
     /** 课程详情底部弹窗：查看信息 + 编辑 / 删除 / 隐藏（M3）。 */

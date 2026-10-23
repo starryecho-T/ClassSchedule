@@ -1,6 +1,8 @@
 package com.classschedule.app.data.backup
 
 import com.classschedule.app.data.ImportPolicy
+import com.classschedule.app.data.TermConfig
+import com.classschedule.app.data.Terms
 import com.classschedule.app.data.db.CourseEntity
 import com.classschedule.app.data.db.toDomain
 import com.classschedule.app.model.Course
@@ -9,9 +11,9 @@ data class RestoreResult(val inserted: Int, val skipped: Int, val replaced: Bool
 class StaleBackupPreviewException : IllegalStateException("课表已变化，请重新预览并确认替换")
 
 object BackupRestorePolicy {
-    fun prepare(rows: List<CourseEntity>): List<CourseEntity> {
+    fun prepare(rows: List<CourseEntity>, term: TermConfig = Terms.DEFAULT): List<CourseEntity> {
         require(rows.isNotEmpty()) { "备份课表为空，未修改现有课程" }
-        validatedCourses(rows)
+        validatedCourses(rows, term)
         // Keep all text, hidden state and duplicates. Only database identities are regenerated.
         return rows.map { it.copy(id = 0) }
     }
@@ -20,7 +22,7 @@ object BackupRestorePolicy {
     fun sameSnapshot(a: List<CourseEntity>, b: List<CourseEntity>) = a.sortedBy { it.id } == b.sortedBy { it.id }
 
     /** Reject corrupt persisted CSV instead of silently dropping invalid tokens on export. */
-    fun validatedCourses(rows: List<CourseEntity>): List<Course> {
+    fun validatedCourses(rows: List<CourseEntity>, term: TermConfig = Terms.DEFAULT): List<Course> {
         fun parse(csv: String, allowEmpty: Boolean): Set<Int> {
             if (csv.isEmpty() && allowEmpty) return emptySet()
             return csv.split(",").map { token ->
@@ -29,6 +31,6 @@ object BackupRestorePolicy {
         }
         return rows.map { row ->
             row.toDomain().copy(weeks = parse(row.weeksCsv, false), hiddenWeeks = parse(row.hiddenWeeksCsv, true))
-        }.also(BackupCodec::validateCourses)
+        }.also { BackupCodec.validateCourses(it, term) }
     }
 }

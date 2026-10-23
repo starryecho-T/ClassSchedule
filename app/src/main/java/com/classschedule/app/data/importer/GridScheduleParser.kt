@@ -35,7 +35,8 @@ object GridScheduleParser {
 
     private class InvalidCard(message: String) : IllegalArgumentException(message)
 
-    fun parse(cards: List<GridCard>, maxWeek: Int = 17, maxPeriod: Int = 12): ScheduleParseResult {
+    fun parse(cards: List<GridCard>, term: com.classschedule.app.data.TermConfig = com.classschedule.app.data.Terms.DEFAULT, maxPeriod: Int = 12): ScheduleParseResult {
+        val maxWeek = term.totalWeeks
         if (maxWeek < 1 || maxPeriod < 1) {
             return ScheduleParseResult(emptyList(), listOf("学期周数和每天节数必须大于零。"), 0)
         }
@@ -47,7 +48,7 @@ object GridScheduleParser {
         val rows = mutableListOf(listOf("课程名称", "教师", "星期", "节次", "周次", "上课地点"))
         cards.forEachIndexed { index, card ->
             try {
-                rows += toRow(card, index)
+                rows += toRow(card, index, term)
             } catch (error: InvalidCard) {
                 issues += error.message ?: "课程${index + 1}无法识别。"
             }
@@ -56,7 +57,7 @@ object GridScheduleParser {
         return ScheduleParseResult(result.courses, (issues + result.issues).distinct(), result.recognizedTables)
     }
 
-    private fun toRow(card: GridCard, index: Int): List<String> {
+    private fun toRow(card: GridCard, index: Int, term: com.classschedule.app.data.TermConfig): List<String> {
         val location = "课程${index + 1}「${card.name.take(30)}」"
         if (card.name.isBlank()) throw InvalidCard("$location：课程名称为空。")
         if (card.name.length > NAME_MAX || card.teacher.length > NAME_MAX || card.time.length > TIME_MAX) {
@@ -76,7 +77,7 @@ object GridScheduleParser {
             if (dateName == null) {
                 throw InvalidCard("$location：缺少上课周次（“${card.time.take(40)}”）。")
             }
-            val derived = deriveWeekFromDate(dateName)
+            val derived = deriveWeekFromDate(dateName, term)
                 ?: throw InvalidCard("$location：日期「${dateName[1]}月${dateName[2]}日」不在本学期内。")
             if (card.week != 0 && derived.dayOfWeek != card.week) {
                 throw InvalidCard("$location：日期「${dateName[1]}月${dateName[2]}日」是星期${derived.dayOfWeek}，与卡片位置（星期${card.week}）不符。")
@@ -117,16 +118,16 @@ object GridScheduleParser {
     private val dateOnlyName = Regex("""^\s*(?:实验|课程)?\s*(\d{1,2})月(\d{1,2})日\s*$""")
 
     /** 用学期开学日把日期换算成周次与星期；不在学期内或参数异常返回 null。 */
-    private fun deriveWeekFromDate(groups: List<String>): DerivedDate? {
+    private fun deriveWeekFromDate(groups: List<String>, term: com.classschedule.app.data.TermConfig): DerivedDate? {
         val month = groups.getOrNull(1)?.toIntOrNull() ?: return null
         val day = groups.getOrNull(2)?.toIntOrNull() ?: return null
-        val start = com.classschedule.app.data.TermCalendar.TERM_START
+        val start = term.startDate
         val date = runCatching { java.time.LocalDate.of(start.year, month, day) }.getOrNull()
             // 跨年学期：秋季月份小于春季时按下一年解释。
             ?: runCatching { java.time.LocalDate.of(start.year + 1, month, day) }.getOrNull()
             ?: return null
-        val week = com.classschedule.app.data.TermCalendar.currentWeek(date)
-        return if (week in 1..com.classschedule.app.data.TermCalendar.TOTAL_WEEKS) {
+        val week = com.classschedule.app.data.TermCalendar.currentWeek(term, date)
+        return if (week in 1..term.totalWeeks) {
             DerivedDate(week, date.dayOfWeek.value)
         } else null
     }

@@ -88,6 +88,9 @@ class ImportActivity : AppCompatActivity() {
         CourseRepository(applicationContext, AppDatabase.getDatabase(applicationContext).courseDao())
     }
 
+    /** 导入目标学期：解析出的周次按该学期校历反推，课程也写入该学期。 */
+    private fun currentTerm() = com.classschedule.app.data.TermPreferences.activeTerm(this)
+
     private val exportSnapshot = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/html"),
     ) { uri ->
@@ -293,7 +296,7 @@ class ImportActivity : AppCompatActivity() {
         captureJob = lifecycleScope.launch {
             try {
                 val capture = readCapture()
-                val result = withContext(Dispatchers.Default) { JluScheduleParser.parse(capture) }
+                val result = withContext(Dispatchers.Default) { JluScheduleParser.parse(capture, currentTerm()) }
                 if (generation != captureGeneration) return@launch
                 if (!result.canImport) {
                     val reasons = result.issues.ifEmpty { listOf(getString(R.string.import_no_table)) }
@@ -414,7 +417,7 @@ class ImportActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val current = readCapture()
-                val result = withContext(Dispatchers.Default) { JluScheduleParser.parse(current) }
+                val result = withContext(Dispatchers.Default) { JluScheduleParser.parse(current, currentTerm()) }
                 if (generation != captureGeneration || sourceUrl != current.sourceUrl ||
                     !result.canImport || result.courses != courses) {
                     invalidateCapture()

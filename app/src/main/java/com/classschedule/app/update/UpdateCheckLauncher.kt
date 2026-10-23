@@ -75,7 +75,8 @@ object UpdateCheckLauncher {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val message = buildString {
             append(context.getString(R.string.update_available_title, info.versionName))
-            if (info.notes.isNotBlank()) append('\n').append(info.notes.take(600))
+            // Release body 是 Markdown 原文：整理成弹窗可读的纯文本再展示
+            if (info.notes.isNotBlank()) append('\n').append(UpdateChecker.formatNotes(info.notes))
         }
         MaterialAlertDialogBuilder(context)
             .setTitle(R.string.update_check)

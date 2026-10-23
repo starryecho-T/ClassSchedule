@@ -1,5 +1,6 @@
 package com.classschedule.app.data.db
 
+import com.classschedule.app.data.Terms
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -10,6 +11,8 @@ import org.junit.Test
 
 /** 覆盖 DAO 默认方法的保护规则；实际 Room 事务回滚需 Android 集成测试验证。 */
 class CourseDaoPolicyTest {
+    private val term = Terms.FALL_2026_2027
+
     @Test
     fun initializationPreservesExistingUserCourses() = runBlocking {
         val existing = course(1, "用户课程")
@@ -51,10 +54,10 @@ class CourseDaoPolicyTest {
         val dao = InMemoryDao(listOf(existing))
 
         try {
-            dao.replaceAll(emptyList())
+            dao.replaceAll(term.id, emptyList())
             fail("空列表替换应被拒绝")
         } catch (_: IllegalArgumentException) {
-            // Expected: the guard runs before deleteAll.
+            // Expected: the guard runs before deleteTerm.
         }
 
         assertEquals(listOf(existing), dao.rows)
@@ -67,11 +70,23 @@ class CourseDaoPolicyTest {
         val incoming = listOf(course(2, "导入课程一"), course(3, "导入课程二"))
         val dao = InMemoryDao(listOf(course(1, "原课程")))
 
-        dao.replaceAll(incoming)
+        dao.replaceAll(term.id, incoming)
 
         assertEquals(incoming, dao.rows)
         assertEquals(1, dao.deleteCalls)
         assertEquals(1, dao.insertCalls)
+    }
+
+    @Test
+    fun replacementOnlyTouchesTheTargetTerm() = runBlocking {
+        val otherTerm = course(1, "其他学期课程").copy(termId = Terms.SPRING_2026_2027.id)
+        val dao = InMemoryDao(listOf(otherTerm, course(2, "本学期课程")))
+
+        dao.replaceAll(term.id, listOf(course(3, "新课程")))
+
+        // 其他学期的数据原样保留
+        assertEquals(listOf(otherTerm, course(3, "新课程")), dao.rows)
+        assertEquals(1, dao.deleteCalls)
     }
 
     @Test
@@ -81,7 +96,7 @@ class CourseDaoPolicyTest {
         val duplicate = existing.copy(id = 99, hiddenWeeksCsv = "", colorIndex = 0)
         val incoming = course(75, "导入课程").copy(hiddenWeeksCsv = "1")
 
-        assertEquals(1, dao.importCourses(listOf(duplicate, incoming), false))
+        assertEquals(1, dao.importCourses(term, listOf(duplicate, incoming), false))
 
         assertEquals(existing, dao.rows.first())
         assertEquals(0L, dao.rows.last().id)
@@ -95,8 +110,8 @@ class CourseDaoPolicyTest {
         val incoming = listOf(course(0, "导入课程"))
         val dao = InMemoryDao()
 
-        assertEquals(1, dao.importCourses(incoming, false))
-        assertEquals(0, dao.importCourses(incoming, false))
+        assertEquals(1, dao.importCourses(term, incoming, false))
+        assertEquals(0, dao.importCourses(term, incoming, false))
 
         assertEquals(1, dao.rows.size)
         assertEquals(1, dao.insertCalls)
@@ -108,7 +123,7 @@ class CourseDaoPolicyTest {
         val incoming = course(91, "导入课程").copy(hiddenWeeksCsv = "1,2")
         val dao = InMemoryDao(listOf(course(1, "原课程")))
 
-        assertEquals(1, dao.importCourses(listOf(incoming, incoming.copy(colorIndex = 2)), true))
+        assertEquals(1, dao.importCourses(term, listOf(incoming, incoming.copy(colorIndex = 2)), true))
 
         assertEquals(1, dao.rows.size)
         assertEquals("导入课程", dao.rows.single().name)
@@ -127,7 +142,7 @@ class CourseDaoPolicyTest {
                 course(0, "无效课程").copy(weeksCsv = "18"))
 
             try {
-                dao.importCourses(incoming, replaceExisting)
+                dao.importCourses(term, incoming, replaceExisting)
                 fail("无效导入应该在写入前被拒绝")
             } catch (_: IllegalArgumentException) {
                 // Expected: validate the complete batch before writes.
@@ -145,7 +160,7 @@ class CourseDaoPolicyTest {
             val existing = course(1, "原课程")
             val dao = InMemoryDao(listOf(existing))
             try {
-                dao.importCourses(emptyList(), replaceExisting)
+                dao.importCourses(term, emptyList(), replaceExisting)
                 fail("空导入应该被拒绝")
             } catch (_: IllegalArgumentException) {
                 // Expected: an empty preview cannot clear the timetable.
@@ -174,20 +189,19 @@ class CourseDaoPolicyTest {
         var insertCalls = 0
 
         override suspend fun count(): Int = rows.size
-        override suspend fun getAllOnce(): List<CourseEntity> = rows.toList()
+        override suspend fun getAllOnce(termId: String): List<CourseEntity> =
+            rows.filter { it.termId == termId }
         override suspend fun getById(id: Long): CourseEntity? = rows.find { it.id == id }
-
-        override suspend fun deleteAll() {
+        override suspend fun deleteTerm(termId: String) {
             deleteCalls++
-            rows.clear()
+            rows.removeAll { it.termId == termId }
         }
-
         override suspend fun insertAll(courses: List<CourseEntity>) {
             insertCalls++
             rows.addAll(courses)
         }
 
-        override fun observeAll(): Flow<List<CourseEntity>> = error("Unused in these tests")
+        override fun observeAll(termId: String): Flow<List<CourseEntity>> = error("Unused in these tests")
         override suspend fun upsert(course: CourseEntity): Long = error("Unused in these tests")
         override suspend fun delete(course: CourseEntity): Unit = error("Unused in these tests")
         override suspend fun deleteById(id: Long): Unit = error("Unused in these tests")

@@ -34,7 +34,8 @@ class TodayCourseWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val repo = CourseRepository(context, AppDatabase.getDatabase(context).courseDao())
         widgetScope.launch {
-            val courses = repo.observeAllOnce()
+            val term = com.classschedule.app.data.TermPreferences.activeTerm(context)
+            val courses = repo.observeAllOnce(term.id)
             appWidgetIds.forEach { id -> appWidgetManager.updateAppWidget(id, buildViews(context, courses)) }
         }
     }
@@ -51,7 +52,7 @@ class TodayCourseWidgetProvider : AppWidgetProvider() {
             TodayCourseWidgetProvider().onUpdate(context, manager, ids)
         }
 
-        /** 渲染小组件内容。课程超过可视行数时截断并提示剩余条数。 */
+        /** 渲染小组件内容。课程超过可视行数时截断并提示剩余条数。周次按当前学期校历。 */
         fun buildViews(context: Context, courses: List<Course>, date: LocalDate = LocalDate.now(), now: LocalTime = LocalTime.now()): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget_today)
             val themed = ThemePreferences.widgetContext(context)
@@ -59,8 +60,9 @@ class TodayCourseWidgetProvider : AppWidgetProvider() {
             views.setInt(R.id.widget_root, "setBackgroundResource", if (dark) R.drawable.widget_bg_dark else R.drawable.widget_bg_light)
             views.setTextColor(R.id.widget_header, themed.getColor(R.color.widget_header))
             views.setTextColor(R.id.widget_body, themed.getColor(R.color.widget_text))
-            val entries = TodayPlan.entriesFor(courses, date)
-            views.setTextViewText(R.id.widget_header, TodayPlan.header(date))
+            val term = com.classschedule.app.data.TermPreferences.activeTerm(context)
+            val entries = TodayPlan.entriesFor(term, courses, date)
+            views.setTextViewText(R.id.widget_header, TodayPlan.header(term, date))
             if (entries.isEmpty()) {
                 views.setTextViewText(R.id.widget_body, "今天没有课程\n好好休息吧 🎉")
                 return views

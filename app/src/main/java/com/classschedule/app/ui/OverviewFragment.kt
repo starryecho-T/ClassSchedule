@@ -27,16 +27,20 @@ import kotlinx.coroutines.flow.filterNotNull
  *
  * 顶部为周内 7 天日期条（默认选中今天），下方按节次排序列出选中日的课程卡片；
  * 周切换与主界面周视图一致，数据经 Room Flow 自动刷新，点击卡片复用课程详情弹窗。
+ * 周次与日期按当前学期校历推算，点按标题可切换学期。
  */
 class OverviewFragment : CourseFragment(R.layout.fragment_overview) {
 
 
 
-    /** 当前查看的周次，默认定位到本周。 */
-    private var selectedWeek: Int = TermCalendar.currentWeek().coerceIn(1, TermCalendar.TOTAL_WEEKS)
+    /** 当前查看的周次，onViewCreated 时定位到本周。 */
+    private var selectedWeek: Int = 1
 
     /** 当前查看的星期（1..7），默认今天。 */
     private var selectedDay: Int = LocalDate.now().dayOfWeek.value.coerceIn(1, 7)
+
+    /** 已响应过切换的学期 id：页面恢复重订阅时不把所选周重置回本周。 */
+    private var observedTermId: String = ""
 
     private var latestCourses: List<Course> = emptyList()
 
@@ -48,10 +52,14 @@ class OverviewFragment : CourseFragment(R.layout.fragment_overview) {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        selectedWeek = savedInstanceState?.getInt("week", selectedWeek)?.coerceIn(1, TermCalendar.TOTAL_WEEKS) ?: selectedWeek
+        selectedWeek = savedInstanceState?.getInt("week", 0)
+            ?.takeIf { it in 1..activeTerm.totalWeeks }
+            ?: TermCalendar.defaultWeek(activeTerm)
+        observedTermId = activeTerm.id
         selectedDay = savedInstanceState?.getInt("day", selectedDay)?.coerceIn(1, 7) ?: selectedDay
         savedScroll = savedInstanceState?.getInt("scroll", savedScroll) ?: savedScroll
         toolbar.setTitle(R.string.overview_title)
+        toolbar.setOnClickListener { showTermPicker() }
 
         view.findViewById<MaterialButton>(R.id.overview_prev).setOnClickListener {
             switchWeek(selectedWeek - 1)
@@ -60,35 +68,49 @@ class OverviewFragment : CourseFragment(R.layout.fragment_overview) {
             switchWeek(selectedWeek + 1)
         }
         view.findViewById<MaterialButton>(R.id.overview_today).setOnClickListener {
-            selectedWeek = TermCalendar.currentWeek().coerceIn(1, TermCalendar.TOTAL_WEEKS)
+            selectedWeek = TermCalendar.defaultWeek(activeTerm)
             selectedDay = LocalDate.now().dayOfWeek.value
             rerender()
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                viewModel.courseState.filterNotNull().collect { courses ->
-                    latestCourses = courses
-                    rerender()
+                launch {
+                    viewModel.term.collect { term ->
+                        if (term.id != observedTermId) {
+                            observedTermId = term.id
+                            // 切换学期后回到该学期的今天，周次与日期条全部重算
+                            selectedWeek = TermCalendar.defaultWeek(term)
+                            selectedDay = LocalDate.now().dayOfWeek.value.coerceIn(1, 7)
+                            rerender()
+                        }
+                    }
+                }
+                launch {
+                    viewModel.courseState.filterNotNull().collect { courses ->
+                        latestCourses = courses
+                        rerender()
+                    }
                 }
             }
         }
     }
 
-    /** 切换周次（自动限制在 1..总周数内）并重绘。 */
+    /** 切换周次（自动限制在当前学期周数内）并重绘。 */
     private fun switchWeek(week: Int) {
-        selectedWeek = week.coerceIn(1, TermCalendar.TOTAL_WEEKS)
+        selectedWeek = week.coerceIn(1, activeTerm.totalWeeks)
         rerender()
     }
 
     private fun rerender() {
-        val dates = TermCalendar.weekDates(selectedWeek)
+        val term = activeTerm
+        val dates = TermCalendar.weekDates(term, selectedWeek)
         val date = dates[selectedDay - 1]
         toolbar.subtitle = getString(
             R.string.overview_subtitle_fmt,
             selectedWeek, date.monthValue, date.dayOfMonth, DAY_NAMES[selectedDay - 1],
         )
-        weekLabel.text = if (TermCalendar.isCurrentWeek(selectedWeek)) {
+        weekLabel.text = if (TermCalendar.isCurrentWeek(term, selectedWeek)) {
             getString(R.string.week_label_current, selectedWeek)
         } else {
             getString(R.string.week_label_fmt, selectedWeek)

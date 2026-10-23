@@ -79,9 +79,9 @@ object JluScheduleParser {
         }
     }
 
-    fun parse(capture: Capture): ScheduleParseResult {
+    fun parse(capture: Capture, term: com.classschedule.app.data.TermConfig = com.classschedule.app.data.Terms.DEFAULT): ScheduleParseResult {
         val result = if (capture.cards.isNotEmpty()) {
-            GridScheduleParser.parse(capture.cards)
+            GridScheduleParser.parse(capture.cards, term)
         } else {
             ScheduleTableParser.parse(capture.tables)
         }

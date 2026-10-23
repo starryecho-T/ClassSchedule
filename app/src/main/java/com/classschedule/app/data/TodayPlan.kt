@@ -34,9 +34,9 @@ object TodayPlan {
      * 周次在学期范围外时返回空列表（放假/学期未开始）；
      * 节次超出作息表范围（异常数据）的课程跳过，不崩溃。
      */
-    fun entriesFor(courses: List<Course>, date: LocalDate): List<Entry> {
-        val week = com.classschedule.app.data.TermCalendar.currentWeek(date)
-        if (week < 1 || week > TermCalendar.TOTAL_WEEKS) return emptyList()
+    fun entriesFor(term: TermConfig, courses: List<Course>, date: LocalDate): List<Entry> {
+        val week = TermCalendar.currentWeek(term, date)
+        if (week < 1 || week > term.totalWeeks) return emptyList()
         val day = date.dayOfWeek.value
         return courses.asSequence()
             .filter { it.dayOfWeek == day && it.isThisWeek(week) }
@@ -69,8 +69,8 @@ object TodayPlan {
     }
 
     /** 小组件头部文案：「第 X 周 周X · MM月dd日」。 */
-    fun header(date: LocalDate): String {
-        val week = TermCalendar.currentWeek(date).coerceIn(1, TermCalendar.TOTAL_WEEKS)
+    fun header(term: TermConfig, date: LocalDate): String {
+        val week = TermCalendar.currentWeek(term, date).coerceIn(1, term.totalWeeks)
         val dayNames = listOf("", "周一", "周二", "周三", "周四", "周五", "周六", "周日")
         return "第${week}周 ${dayNames[date.dayOfWeek.value]} · ${date.monthValue}月${date.dayOfMonth}日"
     }

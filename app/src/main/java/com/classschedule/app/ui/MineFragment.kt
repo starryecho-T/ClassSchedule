@@ -36,6 +36,9 @@ class MineFragment : CourseFragment(R.layout.fragment_mine) {
         val version = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0).versionName
         view.findViewById<TextView>(R.id.mine_version).text = getString(R.string.backup_version, version)
         view.findViewById<View>(R.id.mine_import).setOnClickListener { startActivity(Intent(requireContext(), ImportActivity::class.java)) }
+        val termButton = view.findViewById<TextView>(R.id.mine_term)
+        termButton.text = getString(R.string.term_current_fmt, viewModel.term.value.name)
+        termButton.setOnClickListener { showTermPicker() }
         view.findViewById<View>(R.id.mine_hidden).setOnClickListener { showHiddenCourses() }
         view.findViewById<View>(R.id.mine_update).setOnClickListener { (requireActivity() as MainActivity).checkForUpdate(true) }
         val themeNames = resources.getStringArray(R.array.appearance_modes)
@@ -74,6 +77,7 @@ class MineFragment : CourseFragment(R.layout.fragment_mine) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 launch { viewModel.courses.collect { /* Keep shared data current for hidden-course management. */ } }
+                launch { viewModel.term.collect { term -> termButton.text = getString(R.string.term_current_fmt, term.name) } }
                 launch { backup.state.collect { state ->
                     view.findViewById<View>(R.id.mine_export).isEnabled = !state.busy && state.preview == null
                     view.findViewById<View>(R.id.mine_restore).isEnabled = !state.busy && state.preview == null

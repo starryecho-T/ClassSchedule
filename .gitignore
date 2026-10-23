@@ -30,3 +30,6 @@ Thumbs.db
 # 本地课表快照（含真实课程/教师/教室信息，勿提交）
 schedule_snapshot.html
 schedule_snapshot*.html
+
+# 真机验证数据快照（含真实课表数据库，勿提交）
+device-backup*/

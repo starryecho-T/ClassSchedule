@@ -1,11 +1,14 @@
 package com.classschedule.app.data.backup
 
 import com.classschedule.app.model.Course
+import com.classschedule.app.data.TermConfig
+import com.classschedule.app.data.Terms
 import com.classschedule.app.data.db.toEntity
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.time.Instant
+import java.time.LocalDate
 
 class BackupCodecTest {
     private val course = Course(id = 49, name = "  数学 \"甲\" \n", teacher = " 教师 ", room = "教室 & <A>",
@@ -37,6 +40,29 @@ class BackupCodecTest {
         reject(json().replace("2026-09-07", "2027-02-01"))
         reject(json().replace("\"totalWeeks\": 17", "\"totalWeeks\": 18"))
     }
+    @Test fun backupIsScopedToTheTermItWasExportedFrom() {
+        val spring = Terms.SPRING_2026_2027
+        // 第一学期备份在第二学期恢复被拒（反之亦然）
+        try { BackupCodec.decode(json(), spring); fail("跨学期恢复被接受") } catch (_: IllegalArgumentException) {}
+        val springJson = BackupCodec.encode(listOf(course), "0.9.1", term = spring)
+        assertEquals(listOf(course.copy(id = 0)), BackupCodec.decode(springJson, spring).courses)
+        try { BackupCodec.decode(springJson, Terms.FALL_2026_2027); fail("跨学期恢复被接受") } catch (_: IllegalArgumentException) {}
+        // 默认参数 = 默认学期（第一学期）
+        assertEquals(1, BackupCodec.decode(json()).courses.size)
+    }
+    @Test fun weekRangeValidationFollowsTheActiveTerm() {
+        val short = TermConfig("short", "短学期", LocalDate.of(2026, 9, 7), 5)
+        val shortWeekCourse = course.copy(weeks = setOf(5), hiddenWeeks = emptySet())
+        try { BackupCodec.encode(listOf(shortWeekCourse.copy(weeks = setOf(6))), "0.9.1", term = short); fail("越界周次被接受") }
+        catch (_: IllegalArgumentException) {}
+        assertEquals(
+            listOf(shortWeekCourse.copy(id = 0)),
+            BackupCodec.decode(BackupCodec.encode(listOf(shortWeekCourse), "0.9.1", term = short), short).courses,
+        )
+        // 默认学期仍按 17 周校验
+        try { BackupCodec.encode(listOf(course.copy(weeks = setOf(18))), "0.9.1"); fail("越界周次被接受") }
+        catch (_: IllegalArgumentException) {}
+    }
     @Test fun rejectsMissingRequiredField() { reject(json().replace("\"hiddenWeeks\"", "\"omitted\"")) }
     @Test fun rejectsTrailingContentMalformedAndDuplicateKeys() {
         reject(json() + "{}")
@@ -65,28 +91,28 @@ class BackupCodecTest {
     }
     @Test fun readsUtf8Stream() { assertEquals(1, BackupCodec.read(ByteArrayInputStream(json().toByteArray())).courses.size) }
     @Test fun appendPreservesExistingAndFirstIncomingVariant() {
-        val existing = course.toEntity()
-        val duplicate = course.copy(colorIndex = 0, hiddenWeeks = emptySet()).toEntity()
-        val another = course.copy(name = "新课程").toEntity()
+        val existing = course.toEntity(Terms.DEFAULT.id)
+        val duplicate = course.copy(colorIndex = 0, hiddenWeeks = emptySet()).toEntity(Terms.DEFAULT.id)
+        val another = course.copy(name = "新课程").toEntity(Terms.DEFAULT.id)
         val prepared = BackupRestorePolicy.prepare(listOf(duplicate, another, another.copy(colorIndex = 2)))
         val additions = BackupRestorePolicy.additions(listOf(existing), prepared)
         assertEquals(listOf(another.copy(id = 0)), additions)
         assertTrue(BackupRestorePolicy.additions(listOf(existing) + additions, prepared).isEmpty())
     }
     @Test fun replacementPreservesDuplicatesWithoutTrimming() {
-        val result = BackupRestorePolicy.prepare(listOf(course.toEntity(), course.toEntity()))
+        val result = BackupRestorePolicy.prepare(listOf(course.toEntity(Terms.DEFAULT.id), course.toEntity(Terms.DEFAULT.id)))
         assertEquals(2, result.size)
         assertEquals(course.name, result.first().name)
         assertEquals("2", result.first().hiddenWeeksCsv)
         assertTrue(result.all { it.id == 0L })
     }
     @Test fun detectsConcurrentMutationButNotOrderChange() {
-        val a = course.toEntity(); val b = a.copy(id = 50, name = "其他")
+        val a = course.toEntity(Terms.DEFAULT.id); val b = a.copy(id = 50, name = "其他")
         assertTrue(BackupRestorePolicy.sameSnapshot(listOf(a, b), listOf(b, a)))
         assertFalse(BackupRestorePolicy.sameSnapshot(listOf(a), listOf(a.copy(hiddenWeeksCsv = ""))))
     }
     @Test fun corruptPersistedWeekTokensCannotBeSilentlyExported() {
-        for (row in listOf(course.toEntity().copy(weeksCsv = "1,bad,2"), course.toEntity().copy(hiddenWeeksCsv = "2,bad"))) {
+        for (row in listOf(course.toEntity(Terms.DEFAULT.id).copy(weeksCsv = "1,bad,2"), course.toEntity(Terms.DEFAULT.id).copy(hiddenWeeksCsv = "2,bad"))) {
             try { BackupRestorePolicy.validatedCourses(listOf(row)); fail("Corrupt CSV silently accepted") }
             catch (_: IllegalArgumentException) {}
         }

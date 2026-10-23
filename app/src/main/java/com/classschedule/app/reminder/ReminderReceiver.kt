@@ -22,7 +22,6 @@ import com.classschedule.app.data.db.AppDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.sync.Mutex
@@ -58,13 +57,14 @@ class ReminderReceiver : BroadcastReceiver() {
         }
     }
 
-    /** 计算今日剩余提醒并注册闹钟。 */
+    /** 计算今日剩余提醒并注册闹钟（按当前学期校历）。 */
     private suspend fun scheduleFor(context: Context) {
         val repo = CourseRepository(context, AppDatabase.getDatabase(context).courseDao())
         run {
-            val courses = repo.observeAll().first()
+            val term = com.classschedule.app.data.TermPreferences.activeTerm(context)
+            val courses = repo.observeAllOnce(term.id)
             val now = LocalDateTime.now()
-            val entries = if (hasNotificationPermission(context)) TodayPlan.entriesFor(courses, now.toLocalDate()) else emptyList()
+            val entries = if (hasNotificationPermission(context)) TodayPlan.entriesFor(term, courses, now.toLocalDate()) else emptyList()
             val alarm = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             // 先清掉旧课程维度的闹钟：重算必然覆盖更新的集合。
             cancelCourseAlarms(context, alarm)
@@ -103,7 +103,10 @@ class ReminderReceiver : BroadcastReceiver() {
         run {
             val course = repo.getById(courseId) ?: return
             val now = LocalDateTime.now()
-            val entry = TodayPlan.entriesFor(listOf(course), now.toLocalDate()).singleOrNull() ?: return
+            val entry = TodayPlan.entriesFor(
+                com.classschedule.app.data.TermPreferences.activeTerm(context),
+                listOf(course), now.toLocalDate(),
+            ).singleOrNull() ?: return
             val remindAt = LocalDateTime.of(now.toLocalDate(), entry.startTime).minusMinutes(TodayPlan.REMIND_MINUTES)
             if (now.isBefore(remindAt) || !now.toLocalTime().isBefore(entry.startTime)) return
             // 节次超出作息表（异常数据）时静默跳过该条提醒，不崩溃。

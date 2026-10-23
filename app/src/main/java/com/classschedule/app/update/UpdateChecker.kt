@@ -57,6 +57,48 @@ object UpdateChecker {
     }
 
     /**
+     * 把 Release body（Markdown 原文）整理成弹窗可读的纯文本：
+     * 丢弃与「发现新版本 x」重复的首个一级标题、去掉标题井号与代码反引号、
+     * 丢弃 SHA-256 校验行，压缩连续空行，并在段落或句子边界截断（不拦腰断句）。
+     * 完整说明始终以 Release 页面为准。
+     */
+    fun formatNotes(body: String, maxChars: Int = 600): String {
+        if (body.isBlank()) return ""
+        val cleaned = mutableListOf<String>()
+        var leadingTitleDropped = false
+        for (raw in body.lines()) {
+            val line = raw.trim()
+            val text = when {
+                line.isEmpty() -> ""
+                line.startsWith("APK SHA-256", ignoreCase = true) -> null
+                line.startsWith("#") -> {
+                    val heading = line.trimStart('#').trim()
+                    // 首个一级标题是 Release 标题，与弹窗标题重复
+                    if (!leadingTitleDropped && heading.isNotEmpty() && !line.startsWith("##")) {
+                        leadingTitleDropped = true
+                        null
+                    } else heading
+                }
+                else -> line.replace("`", "")
+            }
+            if (text == null) continue
+            if (text.isEmpty() && (cleaned.isEmpty() || cleaned.last().isEmpty())) continue
+            cleaned += text
+        }
+        return truncate(cleaned.joinToString("\n").trim('\n'), maxChars)
+    }
+
+    /** 优先在段落 / 句号处截断；截断处补省略号。 */
+    private fun truncate(text: String, maxChars: Int): String {
+        if (text.length <= maxChars) return text
+        val head = text.take(maxChars)
+        val cut = maxOf(head.lastIndexOf('\n'), head.lastIndexOf('。'))
+        val shown = (if (cut > maxChars / 2) head.take(cut) else head)
+            .trimEnd(' ', '\n', ',', '，', '、', '；', ';', '：', ':')
+        return "$shown\n…"
+    }
+
+    /**
      * 同步获取最新版本；无网络、无 Release 或解析失败时返回 null。
      * 必须在 IO 线程调用（如 `Dispatchers.IO` 协程内）。
      */

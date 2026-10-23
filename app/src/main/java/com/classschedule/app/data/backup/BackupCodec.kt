@@ -1,6 +1,7 @@
 package com.classschedule.app.data.backup
 
-import com.classschedule.app.data.TermCalendar
+import com.classschedule.app.data.TermConfig
+import com.classschedule.app.data.Terms
 import com.classschedule.app.data.JluTimeTable
 import com.classschedule.app.model.Course
 import com.google.gson.GsonBuilder
@@ -21,7 +22,7 @@ object BackupCodec {
     const val MAX_TEXT = 4096
     private data class NumberToken(val text: String)
 
-    fun read(input: InputStream): BackupDocument {
+    fun read(input: InputStream, term: TermConfig = Terms.DEFAULT): BackupDocument {
         val output = java.io.ByteArrayOutputStream()
         val buffer = ByteArray(8192)
         while (true) {
@@ -32,10 +33,10 @@ object BackupCodec {
         }
         val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
-        return decode(decoder.decode(ByteBuffer.wrap(output.toByteArray())).toString())
+        return decode(decoder.decode(ByteBuffer.wrap(output.toByteArray())).toString(), term)
     }
 
-    fun decode(text: String): BackupDocument {
+    fun decode(text: String, term: TermConfig = Terms.DEFAULT): BackupDocument {
         require(text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "备份文件不能超过 5 MiB" }
         val root = JsonReader(StringReader(text)).use { reader ->
             reader.isLenient = false
@@ -45,10 +46,12 @@ object BackupCodec {
         }
         require(root.string("format") == "classschedule-backup") { "不是本应用的备份文件" }
         require(root.integer("version") == 1) { "不支持的备份协议版本" }
-        val term = root["term"].obj("term")
-        require(term.string("startDate") == TermCalendar.TERM_START.toString() &&
-            term.integer("totalWeeks") == TermCalendar.TOTAL_WEEKS &&
-            term.integer("periodsPerDay") == JluTimeTable.PERIODS.size) { "备份学期与当前学期不一致，未修改课表" }
+        val backupTerm = root["term"].obj("term")
+        require(backupTerm.string("startDate") == term.startDate.toString() &&
+            backupTerm.integer("totalWeeks") == term.totalWeeks &&
+            backupTerm.integer("periodsPerDay") == JluTimeTable.PERIODS.size) {
+            "备份学期（${backupTerm.string("startDate")} 开学）与当前学期（${term.name}）不一致，请先在「我的」页切换学期，未修改课表"
+        }
         val version = root.string("appVersion")
         require(version.isNotBlank()) { "缺少应用版本" }
         val exported = root.string("exportedAt")
@@ -62,7 +65,7 @@ object BackupCodec {
                     dayOfWeek = row.integer("dayOfWeek"), startPeriod = row.integer("startPeriod"),
                     endPeriod = row.integer("endPeriod"), weeks = row.weeks("weeks"),
                     hiddenWeeks = row.weeks("hiddenWeeks"), colorIndex = row.integer("colorIndex"))
-                    .also { validateCourse(it) }
+                    .also { validateCourse(it, term) }
             } catch (e: IllegalArgumentException) {
                 throw IllegalArgumentException("第${index + 1}条课程：${e.message}", e)
             }
@@ -70,14 +73,14 @@ object BackupCodec {
         return BackupDocument(version, exported, courses)
     }
 
-    fun encode(courses: List<Course>, appVersion: String, instant: Instant = Instant.now()): String {
-        validateCourses(courses)
+    fun encode(courses: List<Course>, appVersion: String, instant: Instant = Instant.now(), term: TermConfig = Terms.DEFAULT): String {
+        validateCourses(courses, term)
         require(appVersion.isNotBlank() && appVersion.length <= MAX_TEXT)
         val root = linkedMapOf(
             "format" to "classschedule-backup", "version" to 1, "appVersion" to appVersion,
             "exportedAt" to instant.toString(),
-            "term" to linkedMapOf("startDate" to TermCalendar.TERM_START.toString(),
-                "totalWeeks" to TermCalendar.TOTAL_WEEKS, "periodsPerDay" to JluTimeTable.PERIODS.size),
+            "term" to linkedMapOf("startDate" to term.startDate.toString(),
+                "totalWeeks" to term.totalWeeks, "periodsPerDay" to JluTimeTable.PERIODS.size),
             "courses" to courses.map { c -> linkedMapOf(
                 "name" to c.name, "teacher" to c.teacher, "room" to c.room, "dayOfWeek" to c.dayOfWeek,
                 "startPeriod" to c.startPeriod, "endPeriod" to c.endPeriod,
@@ -87,20 +90,20 @@ object BackupCodec {
         return result
     }
 
-    fun validateCourses(courses: List<Course>) {
+    fun validateCourses(courses: List<Course>, term: TermConfig = Terms.DEFAULT) {
         require(courses.size <= MAX_COURSES) { "课程条数超过 10000" }
         courses.forEachIndexed { index, course ->
-            try { validateCourse(course) } catch (e: IllegalArgumentException) {
+            try { validateCourse(course, term) } catch (e: IllegalArgumentException) {
                 throw IllegalArgumentException("第${index + 1}条课程：${e.message}", e)
             }
         }
     }
-    private fun validateCourse(c: Course) {
+    private fun validateCourse(c: Course, term: TermConfig) {
         require(c.name.isNotBlank()) { "课程名称不能为空" }
         require(listOf(c.name, c.teacher, c.room).all { it.length <= MAX_TEXT }) { "文本字段超过 4096 字符" }
         require(c.dayOfWeek in 1..7) { "星期必须为 1 至 7" }
         require(c.startPeriod in 1..JluTimeTable.PERIODS.size && c.endPeriod in c.startPeriod..JluTimeTable.PERIODS.size) { "节次范围无效" }
-        require(c.weeks.isNotEmpty() && c.weeks.all { it in 1..TermCalendar.TOTAL_WEEKS }) { "周次范围无效" }
+        require(c.weeks.isNotEmpty() && c.weeks.all { it in 1..term.totalWeeks }) { "周次范围无效" }
         require(c.weeks.containsAll(c.hiddenWeeks)) { "隐藏周次必须属于课程周次" }
         require(c.colorIndex >= 0) { "颜色索引不能为负数" }
     }

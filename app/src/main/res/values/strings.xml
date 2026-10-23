@@ -1,7 +1,13 @@
 <resources>
     <string name="app_name">课表</string>
     <string name="timetable_title">第 %1$d 周课表</string>
-    <string name="timetable_subtitle">2026-2027 学年第一学期</string>
+
+    <!-- 学期切换（2026-2027 学年校历） -->
+    <string name="term_switch_title">切换学期</string>
+    <string name="term_current_fmt">当前学期：%1$s</string>
+    <string name="term_entry_fmt">%1$s（%2$d月%3$d日开学）</string>
+    <string name="term_switched_toast">已切换到%1$s</string>
+    <string name="term_toolbar_hint">点击切换学期</string>
 
     <!-- M3 周次切换 -->
     <string name="week_label_fmt">第 %1$d 周</string>

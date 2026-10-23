@@ -6,27 +6,26 @@ import java.time.temporal.ChronoUnit
 /**
  * 校历工具：由学期开学日（第 1 周的周一）推算周次与具体日期。
  *
- * 开学日期如与实际校历不符，修改 [TERM_START] 即可，
- * 周次编号与表头日期会全部自动重算。
+ * 所有函数都以 [TermConfig] 为参数（纯函数，无全局状态）：
+ * 周次编号与表头日期跟随传入的学期，切换学期后各调用方自动重算。
+ * 内置学期见 [Terms]。
  */
 object TermCalendar {
 
-    /** 2026-2027 学年第一学期开学日（第 1 周周一，用户按校历核实：9/30 = 第 4 周周三）。 */
-    val TERM_START: LocalDate = LocalDate.of(2026, 9, 7)
+    /** [today] 在 [term] 中是第几周（学期外可能返回 <=0 或 > 总周数，调用方自行 clamp）。 */
+    fun currentWeek(term: TermConfig, today: LocalDate = LocalDate.now()): Int =
+        Math.floorDiv(ChronoUnit.DAYS.between(term.startDate, today), 7L).toInt() + 1
 
-    /** 学期总周数，与作息表一致。 */
-    const val TOTAL_WEEKS: Int = JluTimeTable.TOTAL_WEEKS
-
-    /** 今天是第几周（学期外可能返回 <=0 或 > 总周数，调用方自行 clamp）。 */
-    fun currentWeek(today: LocalDate = LocalDate.now()): Int =
-        Math.floorDiv(ChronoUnit.DAYS.between(TERM_START, today), 7L).toInt() + 1
-
-    /** 第 [week] 周的 7 个日期（下标 0=周一 ... 6=周日）。 */
-    fun weekDates(week: Int): List<LocalDate> {
-        val monday = TERM_START.plusWeeks((week - 1).toLong())
+    /** [term] 第 [week] 周的 7 个日期（下标 0=周一 ... 6=周日）。 */
+    fun weekDates(term: TermConfig, week: Int): List<LocalDate> {
+        val monday = term.startDate.plusWeeks((week - 1).toLong())
         return (0L..6L).map(monday::plusDays)
     }
 
-    /** [week] 是否为本周。 */
-    fun isCurrentWeek(week: Int): Boolean = currentWeek() == week
+    /** [week] 是否为 [term] 的本周。 */
+    fun isCurrentWeek(term: TermConfig, week: Int): Boolean = currentWeek(term) == week
+
+    /** 默认定位周：今天在学期内取本周，假期/学期外取最近的边界周。 */
+    fun defaultWeek(term: TermConfig, today: LocalDate = LocalDate.now()): Int =
+        currentWeek(term, today).coerceIn(1, term.totalWeeks)
 }

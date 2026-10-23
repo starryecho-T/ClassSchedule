@@ -4,7 +4,7 @@ import com.classschedule.app.data.db.CourseEntity
 
 /** 导入前的纯校验和自然键去重；任何一行有误都拒绝整批。 */
 internal object ImportPolicy {
-    fun prepare(courses: List<CourseEntity>): List<CourseEntity> {
+    fun prepare(courses: List<CourseEntity>, maxWeek: Int = 17): List<CourseEntity> {
         require(courses.isNotEmpty()) { "导入课表为空，未修改现有课程" }
         return courses.mapIndexed { index, course ->
             val location = "第${index + 1}条课程安排"
@@ -16,8 +16,8 @@ internal object ImportPolicy {
             }
             val weekTokens = course.weeksCsv.split(",")
             val weeks = weekTokens.map { it.trim().toIntOrNull() }
-            require(weeks.isNotEmpty() && weeks.all { it != null && it in 1..17 }) {
-                "${location}的周次不能为空且必须为1至17"
+            require(weeks.isNotEmpty() && weeks.all { it != null && it in 1..maxWeek }) {
+                "${location}的周次不能为空且必须为1至$maxWeek"
             }
             require(course.colorIndex >= 0) { "${location}的颜色索引无效" }
             course.copy(

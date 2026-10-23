@@ -93,8 +93,10 @@ class EditCourseActivity : AppCompatActivity() {
 
         npStart.config(1, JluTimeTable.PERIODS.size)
         npEnd.config(1, JluTimeTable.PERIODS.size, value = 2)
-        npFromWeek.config(1, JluTimeTable.TOTAL_WEEKS)
-        npToWeek.config(1, JluTimeTable.TOTAL_WEEKS, value = JluTimeTable.TOTAL_WEEKS)
+        // 周次范围跟随当前学期的总周数（不同学期校历可能不同）
+        val totalWeeks = com.classschedule.app.data.TermPreferences.activeTerm(this).totalWeeks
+        npFromWeek.config(1, totalWeeks)
+        npToWeek.config(1, totalWeeks, value = totalWeeks)
 
         buildDayButtons(findViewById(R.id.day_group))
         buildColorRow(findViewById(R.id.color_row))
